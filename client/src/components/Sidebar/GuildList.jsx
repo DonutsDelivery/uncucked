@@ -21,7 +21,7 @@ export default function GuildList() {
         </svg>
       </button>
 
-      <div className="w-8 h-0.5 bg-discord-dark rounded-full" />
+      <div className="w-8 h-px bg-discord-lightest/12 rounded-full" />
 
       {/* Guild icons */}
       {loadingGuilds ? (
