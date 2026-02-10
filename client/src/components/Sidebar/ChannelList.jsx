@@ -34,8 +34,8 @@ export default function ChannelList() {
 
   if (!selectedGuild) {
     return (
-      <div className="w-60 bg-discord-dark flex flex-col shrink-0">
-        <div className="h-12 px-4 flex items-center shadow-md border-b border-discord-darker">
+      <div className="w-60 bg-discord-dark flex flex-col shrink-0 border-r border-discord-separator">
+        <div className="h-12 px-4 flex items-center border-b border-discord-separator">
           <span className="font-semibold text-discord-white">Discord Relay</span>
         </div>
         <div className="flex-1 flex items-center justify-center p-4">
@@ -49,9 +49,9 @@ export default function ChannelList() {
   }
 
   return (
-    <div className="w-60 bg-discord-dark flex flex-col shrink-0">
+    <div className="w-60 bg-discord-dark flex flex-col shrink-0 border-r border-discord-separator">
       {/* Guild header */}
-      <div className="h-12 px-4 flex items-center shadow-md border-b border-discord-darker">
+      <div className="h-12 px-4 flex items-center border-b border-discord-separator">
         <span className="font-semibold text-discord-white truncate">{selectedGuild.name}</span>
       </div>
 

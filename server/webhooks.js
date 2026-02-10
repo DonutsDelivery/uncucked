@@ -35,7 +35,7 @@ async function getOrCreateWebhook(channel) {
   return webhook;
 }
 
-export async function sendAsUser(channel, user, content, files = []) {
+export async function sendAsUser(channel, user, content, files = [], replyTo = null) {
   const webhook = await getOrCreateWebhook(channel);
 
   const avatarURL = user.avatar
@@ -44,10 +44,30 @@ export async function sendAsUser(channel, user, content, files = []) {
 
   const displayName = user.globalName || user.username;
 
+  // If replying, prepend a quote block
+  let finalContent = content || '';
+  if (replyTo) {
+    try {
+      const refMsg = await Promise.race([
+        channel.messages.fetch(replyTo),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000)),
+      ]);
+      if (refMsg) {
+        const refAuthor = refMsg.author.globalName || refMsg.author.username;
+        const refContent = refMsg.content
+          ? refMsg.content.slice(0, 100).replace(/\n/g, ' ')
+          : '*(attachment)*';
+        finalContent = `> **@${refAuthor}** ${refContent}\n${finalContent}`;
+      }
+    } catch {
+      // If we can't fetch the referenced message, just send without quote
+    }
+  }
+
   // Queue the send with rate limiting
   return enqueue(channel.id, async () => {
     return webhook.send({
-      content: content || undefined,
+      content: finalContent || undefined,
       username: displayName,
       avatarURL,
       files: files.map(f => ({

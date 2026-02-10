@@ -22,6 +22,7 @@ const themes = {
       'dc-scrollbar-hover': '120 122 131',
       'dc-spoiler': '192 194 199',
       'dc-spoiler-revealed': '170 172 177',
+      'dc-separator': 'rgba(150, 150, 158, 0.28)',
     },
   },
   ash: {
@@ -44,6 +45,7 @@ const themes = {
       'dc-scrollbar-hover': '95 96 106',
       'dc-spoiler': '51 51 56',     // same as chat
       'dc-spoiler-revealed': '78 80 88',
+      'dc-separator': 'rgba(149, 148, 157, 0.12)',
     },
   },
   dark: {
@@ -66,6 +68,7 @@ const themes = {
       'dc-scrollbar-hover': '78 80 88',
       'dc-spoiler': '26 26 30',     // same as chat
       'dc-spoiler-revealed': '65 67 74',
+      'dc-separator': 'rgba(149, 148, 157, 0.12)',
     },
   },
   onyx: {
@@ -88,6 +91,7 @@ const themes = {
       'dc-scrollbar-hover': '68 71 79',
       'dc-spoiler': '6 7 8',        // same as chat
       'dc-spoiler-revealed': '53 55 60',
+      'dc-separator': 'rgba(151, 151, 160, 0.20)',
     },
   },
 };

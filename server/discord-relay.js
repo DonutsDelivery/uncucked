@@ -2,6 +2,7 @@
 export function formatMessage(msg) {
   return {
     id: msg.id,
+    type: msg.type,
     channelId: msg.channelId,
     guildId: msg.guildId,
     authorId: msg.author.id,
@@ -34,6 +35,21 @@ export function formatMessage(msg) {
       fields: e.fields || [],
     })),
     referenceId: msg.reference?.messageId || null,
+    referencedMessage: msg.reference?.messageId ? (() => {
+      try {
+        const ref = msg.channel?.messages?.cache.get(msg.reference.messageId);
+        if (!ref) return null;
+        return {
+          id: ref.id,
+          content: ref.content?.slice(0, 200) || '',
+          authorId: ref.author.id,
+          authorUsername: ref.author.username,
+          authorAvatar: ref.author.avatar,
+          authorColor: ref.member?.displayHexColor !== '#000000' ? ref.member?.displayHexColor : null,
+          globalName: ref.author.globalName || null,
+        };
+      } catch { return null; }
+    })() : null,
     editedAt: msg.editedTimestamp,
     createdAt: msg.createdTimestamp,
     isWebhook: msg.webhookId != null,

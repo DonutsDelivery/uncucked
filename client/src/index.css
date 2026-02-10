@@ -20,6 +20,7 @@
   --dc-scrollbar-hover: 78 80 88;
   --dc-spoiler: 26 26 30;
   --dc-spoiler-revealed: 65 67 74;
+  --dc-separator: rgba(149, 148, 157, 0.12);
 }
 
 * {
@@ -81,4 +82,11 @@ a:hover {
 .spoiler.revealed {
   background: rgb(var(--dc-spoiler-revealed));
   color: inherit;
+}
+
+/* Jumbo emoji — messages with only 1-3 emoji */
+.jumbo-emoji .emoji,
+.jumbo-emoji .discord-custom-emoji {
+  width: 3rem;
+  height: 3rem;
 }

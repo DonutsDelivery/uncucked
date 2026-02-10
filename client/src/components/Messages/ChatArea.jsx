@@ -2,8 +2,10 @@ import { useState, useRef, useCallback } from 'react';
 import { useGuild } from '../../context/GuildContext.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useMessages } from '../../hooks/useMessages.js';
+import { useTypingIndicator } from '../../hooks/useTypingIndicator.js';
 import MessageList from './MessageList.jsx';
 import MessageInput from '../Input/MessageInput.jsx';
+import TypingIndicator from './TypingIndicator.jsx';
 import AgeVerificationModal from '../Auth/AgeVerificationModal.jsx';
 import NsfwGate from './NsfwGate.jsx';
 
@@ -11,9 +13,11 @@ export default function ChatArea() {
   const { selectedGuild, selectedChannel } = useGuild();
   const { user } = useAuth();
   const { messages, loading, hasMore, loadMore } = useMessages(selectedChannel?.id);
+  const { typingUsers, emitTyping } = useTypingIndicator(selectedChannel?.id, user?.id);
   const [nsfwBlocked, setNsfwBlocked] = useState(false);
   const [showAgeModal, setShowAgeModal] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [replyTo, setReplyTo] = useState(null);
   const dragCounter = useRef(0);
   const messageInputRef = useRef(null);
 
@@ -49,6 +53,10 @@ export default function ChatArea() {
     if (droppedFiles.length && messageInputRef.current) {
       messageInputRef.current.addFiles(droppedFiles);
     }
+  }, []);
+
+  const handleReply = useCallback((message) => {
+    setReplyTo(message);
   }, []);
 
   if (!selectedGuild) {
@@ -104,9 +112,18 @@ export default function ChatArea() {
         loading={loading}
         hasMore={hasMore}
         onLoadMore={loadMore}
+        onReply={handleReply}
       />
 
-      <MessageInput ref={messageInputRef} channelId={selectedChannel.id} />
+      <TypingIndicator typingUsers={typingUsers} />
+
+      <MessageInput
+        ref={messageInputRef}
+        channelId={selectedChannel.id}
+        onTyping={emitTyping}
+        replyTo={replyTo}
+        onCancelReply={() => setReplyTo(null)}
+      />
 
       {isDragging && (
         <div className="absolute inset-0 bg-discord-blurple/20 border-2 border-dashed border-discord-blurple rounded-lg flex items-center justify-center z-50 pointer-events-none">
@@ -124,7 +141,7 @@ export default function ChatArea() {
 
 function ChannelHeader({ channel }) {
   return (
-    <div className="h-12 px-4 flex items-center shadow-sm border-b border-black/[.24] shrink-0 bg-discord-medium">
+    <div className="h-12 px-4 flex items-center border-b border-discord-separator shrink-0 bg-discord-medium">
       <span className="text-discord-channels-default mr-1.5 text-xl leading-none">#</span>
       <span className="font-semibold text-discord-white text-base">{channel.name}</span>
       {channel.topic && (

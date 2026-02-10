@@ -14,7 +14,7 @@ function isSameDay(ts1, ts2) {
     && d1.getDate() === d2.getDate();
 }
 
-export default function MessageList({ messages, loading, hasMore, onLoadMore }) {
+export default function MessageList({ messages, loading, hasMore, onLoadMore, onReply }) {
   const containerRef = useRef(null);
   const loadingMore = useRef(false);
 
@@ -88,7 +88,7 @@ export default function MessageList({ messages, loading, hasMore, onLoadMore }) 
               {msg.needsDivider && (
                 <DateDivider timestamp={msg.createdAt} />
               )}
-              <Message message={msg} isGrouped={msg.isGrouped} />
+              <Message message={msg} isGrouped={msg.isGrouped} onReply={onReply} />
             </div>
           ))}
         </div>
@@ -99,12 +99,12 @@ export default function MessageList({ messages, loading, hasMore, onLoadMore }) 
 
 function DateDivider({ timestamp }) {
   return (
-    <div className="flex items-center mx-4 mt-6 mb-2">
-      <div className="flex-1 h-px bg-discord-light" />
+    <div className="flex items-center mt-6 mb-2" style={{ margin: '24px 14px 8px 16px' }}>
+      <div className="flex-1 h-px bg-discord-separator" />
       <span className="px-2 text-xs font-semibold text-discord-muted">
         {formatDateDivider(timestamp)}
       </span>
-      <div className="flex-1 h-px bg-discord-light" />
+      <div className="flex-1 h-px bg-discord-separator" />
     </div>
   );
 }

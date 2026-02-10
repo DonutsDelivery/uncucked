@@ -25,6 +25,7 @@ export default {
           red: '#ed4245',
           brand: '#5865f2',
           link: '#00a8fc',
+          separator: 'var(--dc-separator)',
         },
       },
       fontFamily: {

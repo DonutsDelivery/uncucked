@@ -40,7 +40,7 @@ export default function MemberList() {
   });
 
   return (
-    <div className="w-60 bg-discord-dark flex flex-col shrink-0">
+    <div className="w-60 bg-discord-dark flex flex-col shrink-0 border-l border-discord-separator">
       <div className="flex-1 overflow-y-auto pt-6 px-2">
         {loading ? (
           <div className="text-discord-muted text-sm px-2">Loading members...</div>

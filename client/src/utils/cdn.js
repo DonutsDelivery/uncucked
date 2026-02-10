@@ -31,5 +31,19 @@ export function formatTimestamp(ts) {
 
   if (isToday) return `Today at ${time}`;
   if (isYesterday) return `Yesterday at ${time}`;
+
+  // Same week — show day name
+  const diffDays = Math.floor((now - d) / 86400000);
+  if (diffDays < 7) {
+    const dayName = d.toLocaleDateString(undefined, { weekday: 'long' });
+    return `${dayName} at ${time}`;
+  }
+
+  // Same year — omit year
+  if (d.getFullYear() === now.getFullYear()) {
+    const date = d.toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
+    return `${date} at ${time}`;
+  }
+
   return `${d.toLocaleDateString()} ${time}`;
 }

@@ -1,6 +1,8 @@
 // Simple Discord markdown parser
 // Handles: bold, italic, underline, strikethrough, code, spoilers, mentions
 
+import twemoji from 'twemoji';
+
 export function parseMarkdown(text) {
   if (!text) return '';
 
@@ -55,15 +57,40 @@ export function parseMarkdown(text) {
   // Custom emoji <:name:id> and <a:name:id>
   html = html.replace(/&lt;(a?):(\w+):(\d+)&gt;/g, (_, animated, name, id) => {
     const ext = animated ? 'gif' : 'png';
-    return `<img src="https://cdn.discordapp.com/emojis/${id}.${ext}" alt=":${name}:" title=":${name}:" class="inline-block w-5 h-5 align-middle" />`;
+    return `<img src="https://cdn.discordapp.com/emojis/${id}.${ext}" alt=":${name}:" title=":${name}:" class="inline-block w-5 h-5 align-middle discord-custom-emoji" />`;
   });
 
   // URLs
   html = html.replace(/(https?:\/\/[^\s<]+)/g,
     '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-[#00aff4] hover:underline">$1</a>');
 
+  // Parse Unicode emoji into Twemoji SVGs
+  html = twemoji.parse(html, {
+    folder: 'svg',
+    ext: '.svg',
+    className: 'emoji inline-block w-5 h-5 align-[-0.25em]',
+    base: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/',
+  });
+
   // Newlines
   html = html.replace(/\n/g, '<br>');
 
   return html;
+}
+
+export function isEmojiOnly(text) {
+  if (!text) return false;
+  // Strip custom Discord emoji
+  let stripped = text.replace(/<a?:\w+:\d+>/g, '');
+  // Strip Unicode emoji (comprehensive pattern)
+  stripped = stripped.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{27BF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]/gu, '');
+  // Strip whitespace
+  stripped = stripped.replace(/\s/g, '');
+  if (stripped.length > 0) return false;
+
+  // Count emoji (custom + unicode)
+  const customCount = (text.match(/<a?:\w+:\d+>/g) || []).length;
+  const unicodeEmoji = text.replace(/<a?:\w+:\d+>/g, '').match(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{27BF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]/gu) || [];
+  const total = customCount + unicodeEmoji.length;
+  return total >= 1 && total <= 3;
 }

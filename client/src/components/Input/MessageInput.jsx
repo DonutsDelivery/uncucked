@@ -1,17 +1,31 @@
 import { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { useSocket } from '../../context/SocketContext.jsx';
+import { useEmojiAutocomplete } from '../../hooks/useEmojiAutocomplete.js';
 import FileUploadPreview from './FileUploadPreview.jsx';
+import EmojiAutocomplete from './EmojiAutocomplete.jsx';
+import EmojiPicker from './EmojiPicker.jsx';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB Discord bot/webhook limit
 
-const MessageInput = forwardRef(function MessageInput({ channelId }, ref) {
+const MessageInput = forwardRef(function MessageInput({ channelId, onTyping, replyTo, onCancelReply }, ref) {
   const { socket } = useSocket();
   const [text, setText] = useState('');
   const [files, setFiles] = useState([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [selectionStart, setSelectionStart] = useState(null);
+  const [autocompleteIndex, setAutocompleteIndex] = useState(0);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
+  const emojiPickerRef = useRef(null);
+
+  const { suggestions, matchStart } = useEmojiAutocomplete(text, selectionStart);
+
+  // Reset autocomplete index when suggestions change
+  useEffect(() => {
+    setAutocompleteIndex(0);
+  }, [suggestions.length]);
 
   function filterFiles(newFiles) {
     const tooLarge = [];
@@ -37,6 +51,18 @@ const MessageInput = forwardRef(function MessageInput({ channelId }, ref) {
     socket.on('disconnect', reset);
     return () => socket.off('disconnect', reset);
   }, [socket]);
+
+  // Close emoji picker on outside click
+  useEffect(() => {
+    if (!showEmojiPicker) return;
+    function handleClick(e) {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target)) {
+        setShowEmojiPicker(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showEmojiPicker]);
 
   useImperativeHandle(ref, () => ({
     addFiles(newFiles) {
@@ -71,6 +97,7 @@ const MessageInput = forwardRef(function MessageInput({ channelId }, ref) {
         channelId,
         content: text.trim(),
         files: fileData,
+        replyTo: replyTo?.id || undefined,
       }, (res) => {
         clearTimeout(sendTimeout);
         if (res?.error) {
@@ -81,17 +108,92 @@ const MessageInput = forwardRef(function MessageInput({ channelId }, ref) {
 
       setText('');
       setFiles([]);
+      setShowEmojiPicker(false);
+      onCancelReply?.();
     } catch (err) {
       console.error('Send error:', err);
       setSending(false);
     }
-  }, [text, files, socket, channelId, sending]);
+  }, [text, files, socket, channelId, sending, replyTo, onCancelReply]);
+
+  function insertEmoji(emoji) {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const newText = text.slice(0, start) + emoji.native + text.slice(end);
+    setText(newText);
+    const newPos = start + emoji.native.length;
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.setSelectionRange(newPos, newPos);
+      setSelectionStart(newPos);
+    });
+  }
+
+  function insertAutocompleteEmoji(emoji) {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    // Replace from matchStart to cursor with emoji.native
+    const newText = text.slice(0, matchStart) + emoji.native + text.slice(selectionStart);
+    setText(newText);
+    const newPos = matchStart + emoji.native.length;
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.setSelectionRange(newPos, newPos);
+      setSelectionStart(newPos);
+    });
+  }
 
   function handleKeyDown(e) {
+    // Autocomplete navigation
+    if (suggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setAutocompleteIndex(i => (i + 1) % suggestions.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setAutocompleteIndex(i => (i - 1 + suggestions.length) % suggestions.length);
+        return;
+      }
+      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+        e.preventDefault();
+        insertAutocompleteEmoji(suggestions[autocompleteIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setSelectionStart(null);
+        return;
+      }
+    }
+
+    if (e.key === 'Escape' && showEmojiPicker) {
+      setShowEmojiPicker(false);
+      return;
+    }
+
+    if (e.key === 'Escape' && replyTo) {
+      onCancelReply?.();
+      return;
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
+  }
+
+  function handleChange(e) {
+    setText(e.target.value);
+    setSelectionStart(e.target.selectionStart);
+    onTyping?.();
+  }
+
+  function handleSelect(e) {
+    setSelectionStart(e.target.selectionStart);
   }
 
   function handlePaste(e) {
@@ -133,7 +235,33 @@ const MessageInput = forwardRef(function MessageInput({ channelId }, ref) {
         <FileUploadPreview files={files} onRemove={removeFile} />
       )}
 
-      <div className="bg-discord-input rounded-lg flex items-end">
+      {/* Reply preview bar */}
+      {replyTo && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-discord-dark/50 rounded-t-lg border-b border-discord-lighter/10 text-sm">
+          <span className="text-discord-muted">Replying to</span>
+          <span className="text-discord-white font-medium">
+            {replyTo.globalName || replyTo.authorUsername}
+          </span>
+          <button
+            onClick={onCancelReply}
+            className="ml-auto text-discord-muted hover:text-discord-text transition-colors"
+            title="Cancel reply"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      <div className={`bg-discord-input ${replyTo ? 'rounded-b-lg' : 'rounded-lg'} flex items-end relative`}>
+        {/* Emoji autocomplete dropdown */}
+        <EmojiAutocomplete
+          suggestions={suggestions}
+          onSelect={insertAutocompleteEmoji}
+          selectedIndex={autocompleteIndex}
+        />
+
         {/* File upload button */}
         <button
           onClick={() => fileInputRef.current?.click()}
@@ -158,9 +286,10 @@ const MessageInput = forwardRef(function MessageInput({ channelId }, ref) {
         <textarea
           ref={textareaRef}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={handleChange}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
+          onSelect={handleSelect}
           placeholder={`Message #${channelId ? 'channel' : ''}`}
           className="flex-1 bg-transparent text-discord-text placeholder-discord-lighter py-[11px] px-1 resize-none max-h-[200px] outline-none text-base leading-[1.375rem]"
           rows={1}
@@ -170,6 +299,29 @@ const MessageInput = forwardRef(function MessageInput({ channelId }, ref) {
             e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px';
           }}
         />
+
+        {/* Emoji picker button */}
+        <div className="relative" ref={emojiPickerRef}>
+          <button
+            onClick={() => setShowEmojiPicker(v => !v)}
+            className="p-3 text-discord-channels-default hover:text-discord-text transition-colors shrink-0"
+            title="Emoji"
+          >
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </button>
+
+          {showEmojiPicker && (
+            <div className="absolute bottom-12 right-0 z-50">
+              <EmojiPicker onSelect={(native) => {
+                insertEmoji({ native });
+                setShowEmojiPicker(false);
+              }} />
+            </div>
+          )}
+        </div>
 
         {/* Send button */}
         {(text.trim() || files.length > 0) && (

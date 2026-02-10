@@ -167,6 +167,44 @@ app.get('/api/channels/:channelId/messages', authenticateJWT, async (req, res) =
 
     const messages = await channel.messages.fetch(options);
     const formatted = messages.map(m => formatMessage(m)).reverse();
+
+    // Resolve missing referenced messages
+    const unresolvedRefs = formatted.filter(m => m.referenceId && !m.referencedMessage);
+    if (unresolvedRefs.length) {
+      const uniqueRefIds = [...new Set(unresolvedRefs.map(m => m.referenceId))];
+      const resolved = await Promise.allSettled(
+        uniqueRefIds.map(async (refId) => {
+          const refMsg = await Promise.race([
+            channel.messages.fetch(refId),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000)),
+          ]);
+          return { refId, data: formatMessage(refMsg) };
+        })
+      );
+
+      const refMap = new Map();
+      for (const result of resolved) {
+        if (result.status === 'fulfilled') {
+          const { refId, data } = result.value;
+          refMap.set(refId, {
+            id: data.id,
+            content: data.content?.slice(0, 200) || '',
+            authorId: data.authorId,
+            authorUsername: data.authorUsername,
+            authorAvatar: data.authorAvatar,
+            authorColor: data.authorColor,
+            globalName: data.globalName,
+          });
+        }
+      }
+
+      for (const msg of formatted) {
+        if (msg.referenceId && !msg.referencedMessage && refMap.has(msg.referenceId)) {
+          msg.referencedMessage = refMap.get(msg.referenceId);
+        }
+      }
+    }
+
     res.json(formatted);
   } catch (err) {
     console.error('Failed to fetch messages:', err);

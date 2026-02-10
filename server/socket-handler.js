@@ -62,7 +62,7 @@ export function setupSocketHandlers(io, botManager) {
     });
 
     // Send a message via webhook
-    socket.on('message:send', async ({ channelId, content, files }, callback) => {
+    socket.on('message:send', async ({ channelId, content, files, replyTo }, callback) => {
       try {
         if (!checkMessageRate(socket)) {
           return callback?.({ error: 'Slow down — too many messages' });
@@ -82,7 +82,7 @@ export function setupSocketHandlers(io, botManager) {
           return callback?.({ error: 'Age verification required', code: 'NSFW_GATE' });
         }
 
-        const webhookMsg = await sendAsUser(channel, socket.user, content, files || []);
+        const webhookMsg = await sendAsUser(channel, socket.user, content, files || [], replyTo);
 
         callback?.({ success: true, messageId: webhookMsg.id });
       } catch (err) {
