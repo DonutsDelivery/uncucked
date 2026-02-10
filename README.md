@@ -30,12 +30,42 @@ Your browser talks to the Express server, which talks to Discord through a bot. 
 - **Embeds & Attachments** — Full embed rendering, image/video previews
 - **Guild Switching** — Access any server the bot is in
 
-## Prerequisites
+## Getting Started
 
-- **Node.js** 18+
-- A **Discord Application** with a bot (see setup below)
+### Option 1: Just add the bot (easiest)
 
-## Setup
+No hosting required. Add our bot to your Discord server and use it at **[uncucked.online](https://uncucked.online)**.
+
+1. **[Add bot to your server](https://discord.com/oauth2/authorize?client_id=1470610846572089529&permissions=536947728&scope=bot)**
+2. Go to **[uncucked.online](https://uncucked.online)** and log in with Discord
+3. You'll see any server that both you and the bot are in
+
+That's it. No setup, no server, no config. Your server admin just adds the bot and everyone connects at [uncucked.online](https://uncucked.online).
+
+---
+
+### Option 2: Self-host, use our domain
+
+Run your own server with your own bot, and get a free subdomain on `uncucked.online` so you don't need to buy a domain.
+
+1. Set up your own server (see [Server Setup](#server-setup) below)
+2. Request a subdomain — open an issue or DM us with your server IP
+3. We'll point `yourname.uncucked.online` to your server
+4. Add `https://yourname.uncucked.online/api/auth/callback` as a redirect URL in your Discord app
+
+---
+
+### Option 3: Fully self-hosted
+
+Run everything yourself — your own server, your own domain, your own bot.
+
+1. Set up your own server (see [Server Setup](#server-setup) below)
+2. Point your domain to your server and set up SSL (Let's Encrypt + nginx)
+3. Add `https://yourdomain.com/api/auth/callback` as a redirect URL in your Discord app
+
+---
+
+## Server Setup
 
 ### 1. Create a Discord Application
 
@@ -48,7 +78,7 @@ Your browser talks to the Express server, which talks to Discord through a bot. 
    - Enable **Presence Intent**
 4. Go to **OAuth2** tab:
    - Save the **Client ID** and **Client Secret**
-   - Add a redirect URL: `http://localhost:3001/auth/callback` (or your server URL)
+   - Add a redirect URL: `http://localhost:3001/api/auth/callback` (and your production URL later)
 
 ### 2. Invite the Bot
 
@@ -124,6 +154,9 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
 ```
@@ -139,6 +172,7 @@ server {
 | `JWT_SECRET` | Secret for signing JWT tokens |
 | `CLIENT_URL` | Frontend URL for CORS/redirects |
 | `SERVER_URL` | Backend URL for OAuth2 callback |
+| `ALLOWED_ORIGINS` | Comma-separated list of allowed origins for CORS (optional, defaults to CLIENT_URL) |
 
 ## Tech Stack
 

@@ -8,11 +8,19 @@ const router = Router();
 const DISCORD_API = 'https://discord.com/api/v10';
 const SCOPES = 'identify guilds';
 
+// Derive base URL from the incoming request
+function getBaseUrl(req) {
+  const proto = req.headers['x-forwarded-proto'] || req.protocol;
+  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  return `${proto}://${host}`;
+}
+
 // Redirect to Discord OAuth2
 router.get('/discord', (req, res) => {
+  const baseUrl = getBaseUrl(req);
   const params = new URLSearchParams({
     client_id: config.discord.clientId,
-    redirect_uri: `${config.serverUrl}/api/auth/callback`,
+    redirect_uri: `${baseUrl}/api/auth/callback`,
     response_type: 'code',
     scope: SCOPES,
   });
@@ -22,7 +30,8 @@ router.get('/discord', (req, res) => {
 // OAuth2 callback
 router.get('/callback', async (req, res) => {
   const { code } = req.query;
-  if (!code) return res.redirect(`${config.clientUrl}/login?error=no_code`);
+  const baseUrl = getBaseUrl(req);
+  if (!code) return res.redirect(`${baseUrl}/login?error=no_code`);
 
   try {
     // Exchange code for tokens
@@ -34,13 +43,13 @@ router.get('/callback', async (req, res) => {
         client_secret: config.discord.clientSecret,
         grant_type: 'authorization_code',
         code,
-        redirect_uri: `${config.serverUrl}/api/auth/callback`,
+        redirect_uri: `${baseUrl}/api/auth/callback`,
       }),
     });
 
     if (!tokenRes.ok) {
       console.error('Token exchange failed:', await tokenRes.text());
-      return res.redirect(`${config.clientUrl}/login?error=token_failed`);
+      return res.redirect(`${baseUrl}/login?error=token_failed`);
     }
 
     const tokens = await tokenRes.json();
@@ -51,7 +60,7 @@ router.get('/callback', async (req, res) => {
     });
 
     if (!userRes.ok) {
-      return res.redirect(`${config.clientUrl}/login?error=user_fetch_failed`);
+      return res.redirect(`${baseUrl}/login?error=user_fetch_failed`);
     }
 
     const user = await userRes.json();
@@ -78,15 +87,15 @@ router.get('/callback', async (req, res) => {
     // Set as httpOnly cookie and redirect
     res.cookie('token', token, {
       httpOnly: true,
-      secure: config.serverUrl.startsWith('https'),
+      secure: baseUrl.startsWith('https'),
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    res.redirect(`${config.clientUrl}/`);
+    res.redirect(`${baseUrl}/`);
   } catch (err) {
     console.error('OAuth2 callback error:', err);
-    res.redirect(`${config.clientUrl}/login?error=unknown`);
+    res.redirect(`${baseUrl}/login?error=unknown`);
   }
 });
 

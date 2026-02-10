@@ -8,6 +8,11 @@ for (const key of required) {
   }
 }
 
+// Allowed origins for CORS and OAuth redirects
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim())
+  : [process.env.CLIENT_URL || 'http://localhost:5173'];
+
 export default {
   discord: {
     token: process.env.DISCORD_TOKEN,
@@ -18,4 +23,5 @@ export default {
   jwtSecret: process.env.JWT_SECRET,
   clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
   serverUrl: process.env.SERVER_URL || 'http://localhost:3001',
+  allowedOrigins,
 };
