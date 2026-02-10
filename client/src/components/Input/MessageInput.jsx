@@ -1,14 +1,49 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { useSocket } from '../../context/SocketContext.jsx';
 import FileUploadPreview from './FileUploadPreview.jsx';
 
-export default function MessageInput({ channelId }) {
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB Discord bot/webhook limit
+
+const MessageInput = forwardRef(function MessageInput({ channelId }, ref) {
   const { socket } = useSocket();
   const [text, setText] = useState('');
   const [files, setFiles] = useState([]);
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState(null);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
+
+  function filterFiles(newFiles) {
+    const tooLarge = [];
+    const valid = [];
+    for (const f of newFiles) {
+      if (f.size > MAX_FILE_SIZE) {
+        tooLarge.push(f.name);
+      } else {
+        valid.push(f);
+      }
+    }
+    if (tooLarge.length) {
+      setError(`File${tooLarge.length > 1 ? 's' : ''} too large (10MB limit): ${tooLarge.join(', ')}`);
+      setTimeout(() => setError(null), 5000);
+    }
+    return valid;
+  }
+
+  // Reset sending state if socket disconnects mid-send
+  useEffect(() => {
+    if (!socket) return;
+    const reset = () => setSending(false);
+    socket.on('disconnect', reset);
+    return () => socket.off('disconnect', reset);
+  }, [socket]);
+
+  useImperativeHandle(ref, () => ({
+    addFiles(newFiles) {
+      const valid = filterFiles(Array.from(newFiles));
+      if (valid.length) setFiles(prev => [...prev, ...valid]);
+    },
+  }));
 
   const sendMessage = useCallback(async () => {
     if ((!text.trim() && !files.length) || !socket || sending) return;
@@ -21,7 +56,7 @@ export default function MessageInput({ channelId }) {
         files.map(f => new Promise((resolve) => {
           const reader = new FileReader();
           reader.onload = () => resolve({
-            buffer: Array.from(new Uint8Array(reader.result)),
+            buffer: reader.result,
             originalname: f.name,
             mimetype: f.type,
             size: f.size,
@@ -30,11 +65,14 @@ export default function MessageInput({ channelId }) {
         }))
       );
 
+      const sendTimeout = setTimeout(() => setSending(false), 15000);
+
       socket.emit('message:send', {
         channelId,
         content: text.trim(),
         files: fileData,
       }, (res) => {
+        clearTimeout(sendTimeout);
         if (res?.error) {
           console.error('Send failed:', res.error);
         }
@@ -60,19 +98,22 @@ export default function MessageInput({ channelId }) {
     const items = e.clipboardData?.items;
     if (!items) return;
 
+    const pasted = [];
     for (const item of items) {
       if (item.type.startsWith('image/')) {
         const file = item.getAsFile();
-        if (file) {
-          setFiles(prev => [...prev, file]);
-        }
+        if (file) pasted.push(file);
       }
+    }
+    if (pasted.length) {
+      const valid = filterFiles(pasted);
+      if (valid.length) setFiles(prev => [...prev, ...valid]);
     }
   }
 
   function handleFileSelect(e) {
-    const newFiles = Array.from(e.target.files || []);
-    setFiles(prev => [...prev, ...newFiles]);
+    const valid = filterFiles(Array.from(e.target.files || []));
+    if (valid.length) setFiles(prev => [...prev, ...valid]);
     e.target.value = '';
   }
 
@@ -82,15 +123,21 @@ export default function MessageInput({ channelId }) {
 
   return (
     <div className="px-4 pb-6 shrink-0">
+      {error && (
+        <div className="mb-2 px-3 py-2 bg-red-500/20 border border-red-500/50 rounded text-red-300 text-sm">
+          {error}
+        </div>
+      )}
+
       {files.length > 0 && (
         <FileUploadPreview files={files} onRemove={removeFile} />
       )}
 
-      <div className="bg-discord-light rounded-lg flex items-end">
+      <div className="bg-discord-input rounded-lg flex items-end">
         {/* File upload button */}
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="p-3 text-discord-lightest hover:text-discord-text transition-colors shrink-0"
+          className="p-3 text-discord-channels-default hover:text-discord-text transition-colors shrink-0"
           title="Upload file"
         >
           <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -115,7 +162,7 @@ export default function MessageInput({ channelId }) {
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           placeholder={`Message #${channelId ? 'channel' : ''}`}
-          className="flex-1 bg-transparent text-discord-text placeholder-discord-lighter py-3 px-1 resize-none max-h-[200px] outline-none text-sm"
+          className="flex-1 bg-transparent text-discord-text placeholder-discord-lighter py-[11px] px-1 resize-none max-h-[200px] outline-none text-base leading-[1.375rem]"
           rows={1}
           disabled={sending}
           onInput={(e) => {
@@ -140,4 +187,6 @@ export default function MessageInput({ channelId }) {
       </div>
     </div>
   );
-}
+});
+
+export default MessageInput;

@@ -8,14 +8,14 @@ export default function Message({ message, isGrouped }) {
 
   if (isGrouped) {
     return (
-      <div className="px-4 py-0.5 hover:bg-discord-medium/50 group relative pl-[72px]">
-        <span className="absolute left-4 top-1 text-[11px] text-discord-lighter opacity-0 group-hover:opacity-100 w-10 text-right">
+      <div className="px-4 py-[1px] hover:bg-black/[.06] group relative pl-[72px]">
+        <span className="absolute left-0 top-[5px] text-[11px] text-discord-muted opacity-0 group-hover:opacity-100 w-[56px] text-right">
           {new Date(message.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
         </span>
 
         {message.content && (
           <div
-            className="text-sm text-discord-text leading-relaxed break-words"
+            className="text-discord-text leading-[1.375rem] break-words"
             dangerouslySetInnerHTML={{ __html: parseMarkdown(message.content) }}
           />
         )}
@@ -27,34 +27,39 @@ export default function Message({ message, isGrouped }) {
   }
 
   return (
-    <div className="px-4 pt-4 pb-0.5 hover:bg-discord-medium/50 flex gap-4">
+    <div className="px-4 mt-[1.0625rem] pb-0 hover:bg-black/[.06] flex gap-4 relative">
       <img
         src={userAvatarUrl(message.authorId, message.authorAvatar, 80)}
         alt={displayName}
-        className="w-10 h-10 rounded-full shrink-0 mt-0.5"
+        className="w-10 h-10 rounded-full shrink-0 mt-0.5 cursor-pointer"
       />
 
       <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2">
-          <span className="font-medium text-white text-sm hover:underline cursor-pointer">
+        <div className="flex items-baseline gap-1">
+          <span
+            className="font-medium text-sm leading-[1.375rem] hover:underline cursor-pointer"
+            style={{ color: message.authorColor || 'rgb(var(--dc-white))' }}
+          >
             {displayName}
           </span>
           {message.authorBot && (
-            <span className="text-[10px] bg-discord-blurple text-white px-1 rounded font-medium">
+            <span className="text-[10px] bg-discord-blurple text-white px-[4.8px] py-[1px] rounded-sm font-medium leading-[15px] ml-1 align-baseline inline-flex items-center">
               BOT
             </span>
           )}
-          <span className="text-xs text-discord-lighter">
+          <span className="text-xs text-discord-muted ml-1">
             {formatTimestamp(message.createdAt)}
           </span>
           {message.editedAt && (
-            <span className="text-[10px] text-discord-lighter">(edited)</span>
+            <span className="text-[10px] text-discord-muted" title={new Date(message.editedAt).toLocaleString()}>
+              (edited)
+            </span>
           )}
         </div>
 
         {message.content && (
           <div
-            className="text-sm text-discord-text leading-relaxed break-words"
+            className="text-discord-text leading-[1.375rem] break-words"
             dangerouslySetInnerHTML={{ __html: parseMarkdown(message.content) }}
           />
         )}

@@ -1,16 +1,22 @@
-import { canBotViewChannel, isNsfwChannel } from './permissions.js';
+import { canBotViewChannel, isNsfwChannel, canUserViewChannel, canUserSendMessages } from './permissions.js';
 import { sendAsUser } from './webhooks.js';
 
-export function setupSocketHandlers(io, discordClient) {
+export function setupSocketHandlers(io, botManager) {
   io.on('connection', (socket) => {
     console.log(`[socket] ${socket.user.username} connected`);
 
     // Join a channel room
     socket.on('channel:join', async ({ channelId }, callback) => {
       try {
-        const channel = discordClient.channels.cache.get(channelId);
-        if (!channel) return callback?.({ error: 'Channel not found' });
-        if (!canBotViewChannel(channel)) return callback?.({ error: 'No access' });
+        console.log(`[socket] channel:join ${channelId} by ${socket.user.username} (${socket.user.id})`);
+        const channel = botManager.findChannel(channelId);
+        if (!channel) { console.log('[socket] channel:join - channel not found'); return callback?.({ error: 'Channel not found' }); }
+        if (!canBotViewChannel(channel)) { console.log('[socket] channel:join - bot no access'); return callback?.({ error: 'No access' }); }
+
+        const member = await botManager.fetchMember(channel.guild.id, socket.user.id);
+        console.log(`[socket] channel:join - fetchMember result: ${member ? member.user.tag : 'null'}`);
+        if (!member) return callback?.({ error: 'Not a member of this guild' });
+        if (!canUserViewChannel(channel, member)) { console.log('[socket] channel:join - user no view permission'); return callback?.({ error: 'No access to this channel' }); }
 
         // NSFW check
         if (isNsfwChannel(channel) && !socket.user.ageVerified) {
@@ -45,9 +51,15 @@ export function setupSocketHandlers(io, discordClient) {
     // Send a message via webhook
     socket.on('message:send', async ({ channelId, content, files }, callback) => {
       try {
-        const channel = discordClient.channels.cache.get(channelId);
+        console.log(`[socket] message:send to ${channelId} by ${socket.user.username} (${socket.user.id})`);
+        const channel = botManager.findChannel(channelId);
         if (!channel) return callback?.({ error: 'Channel not found' });
         if (!canBotViewChannel(channel)) return callback?.({ error: 'No access' });
+
+        const member = await botManager.fetchMember(channel.guild.id, socket.user.id);
+        console.log(`[socket] message:send - fetchMember result: ${member ? member.user.tag : 'null'}`);
+        if (!member) return callback?.({ error: 'Not a member of this guild' });
+        if (!canUserSendMessages(channel, member)) { console.log('[socket] message:send - user no send permission'); return callback?.({ error: 'No permission to send messages in this channel' }); }
 
         if (isNsfwChannel(channel) && !socket.user.ageVerified) {
           return callback?.({ error: 'Age verification required', code: 'NSFW_GATE' });
@@ -72,8 +84,8 @@ export function setupSocketHandlers(io, discordClient) {
       });
     });
 
-    socket.on('disconnect', () => {
-      console.log(`[socket] ${socket.user.username} disconnected`);
+    socket.on('disconnect', (reason) => {
+      console.log(`[socket] ${socket.user.username} disconnected — reason: ${reason}`);
     });
   });
 }

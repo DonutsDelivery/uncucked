@@ -45,6 +45,17 @@ export async function initDatabase() {
     )
   `);
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS registered_bots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      bot_token TEXT NOT NULL,
+      bot_id TEXT NOT NULL UNIQUE,
+      bot_name TEXT,
+      added_by TEXT,
+      created_at INTEGER DEFAULT (strftime('%s','now') * 1000)
+    )
+  `);
+
   saveDb();
   return db;
 }
@@ -113,5 +124,30 @@ export function cacheWebhook(channelId, webhookId, webhookToken) {
     [channelId, webhookId, webhookToken]
   );
   saveDb();
+}
+
+// Registered bot helpers
+export function addBot(token, botId, botName, addedBy) {
+  db.run(
+    `INSERT OR REPLACE INTO registered_bots (bot_token, bot_id, bot_name, added_by) VALUES (?, ?, ?, ?)`,
+    [token, botId, botName || null, addedBy || null]
+  );
+  saveDb();
+}
+
+export function removeBot(botId) {
+  db.run(`DELETE FROM registered_bots WHERE bot_id = ?`, [botId]);
+  saveDb();
+}
+
+export function getAllBots() {
+  const result = db.exec(`SELECT bot_id, bot_name, bot_token, added_by, created_at FROM registered_bots`);
+  if (!result.length || !result[0].values.length) return [];
+  const cols = result[0].columns;
+  return result[0].values.map(vals => {
+    const row = {};
+    cols.forEach((c, i) => row[c] = vals[i]);
+    return row;
+  });
 }
 

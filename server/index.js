@@ -4,18 +4,18 @@ import { Server as SocketServer } from 'socket.io';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import multer from 'multer';
-import { Client, GatewayIntentBits, Partials } from 'discord.js';
 
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
 import config from './config.js';
-import { initDatabase } from './database.js';
+import { initDatabase, getAllBots, addBot, removeBot } from './database.js';
 import authRouter from './auth.js';
 import { authenticateJWT, requireAgeVerification, authenticateSocket } from './middleware.js';
-import { setupDiscordRelay, formatMessage } from './discord-relay.js';
+import { setupDiscordRelay, setupRelayForClient, formatMessage } from './discord-relay.js';
 import { setupSocketHandlers } from './socket-handler.js';
-import { getChannelsByCategory, canBotViewChannel, isNsfwChannel, canManageWebhooks } from './permissions.js';
+import { getChannelsByCategory, canBotViewChannel, isNsfwChannel, canManageWebhooks, canUserReadHistory, canUserSendMessages } from './permissions.js';
+import { BotManager } from './bot-manager.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -35,19 +35,11 @@ const io = new SocketServer(httpServer, {
     origin: corsOrigin,
     credentials: true,
   },
+  maxHttpBufferSize: 10e6, // 10MB — match Discord bot/webhook file size limit
 });
 
-// Discord client
-const discordClient = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.GuildMessageTyping,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers,
-  ],
-  partials: [Partials.Message, Partials.Channel],
-});
+// Bot manager (replaces single discordClient)
+const botManager = new BotManager();
 
 // Middleware
 app.use(cors({ origin: corsOrigin, credentials: true }));
@@ -57,7 +49,7 @@ app.use(express.json());
 // File upload
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB (Discord limit)
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB (Discord bot/webhook limit)
 });
 
 // Auth routes
@@ -92,15 +84,22 @@ app.get('/api/guilds', authenticateJWT, async (req, res) => {
 
     const userGuildIds = new Set(userGuilds.map(g => g.id));
 
-    // Filter bot guilds to only those the user is also in
-    const guilds = discordClient.guilds.cache
-      .filter(g => userGuildIds.has(g.id))
-      .map(g => ({
-        id: g.id,
-        name: g.name,
-        icon: g.icon,
-        memberCount: g.memberCount,
-      }));
+    // Collect guilds from all bots, deduplicate by guild ID
+    const seen = new Set();
+    const guilds = [];
+    for (const client of botManager.getAllClients()) {
+      for (const [id, g] of client.guilds.cache) {
+        if (userGuildIds.has(id) && !seen.has(id)) {
+          seen.add(id);
+          guilds.push({
+            id: g.id,
+            name: g.name,
+            icon: g.icon,
+            memberCount: g.memberCount,
+          });
+        }
+      }
+    }
 
     res.json(guilds);
   } catch (err) {
@@ -110,11 +109,14 @@ app.get('/api/guilds', authenticateJWT, async (req, res) => {
 });
 
 // Get channels for a guild
-app.get('/api/guilds/:guildId/channels', authenticateJWT, (req, res) => {
-  const guild = discordClient.guilds.cache.get(req.params.guildId);
+app.get('/api/guilds/:guildId/channels', authenticateJWT, async (req, res) => {
+  const guild = botManager.findGuild(req.params.guildId);
   if (!guild) return res.status(404).json({ error: 'Guild not found' });
 
-  const categories = getChannelsByCategory(guild);
+  const member = await botManager.fetchMember(req.params.guildId, req.user.id);
+  if (!member) return res.status(403).json({ error: 'Not a member of this guild' });
+
+  const categories = getChannelsByCategory(guild, member);
 
   const result = categories.map(cat => ({
     id: cat.id,
@@ -133,9 +135,13 @@ app.get('/api/guilds/:guildId/channels', authenticateJWT, (req, res) => {
 
 // Get messages for a channel
 app.get('/api/channels/:channelId/messages', authenticateJWT, async (req, res) => {
-  const channel = discordClient.channels.cache.get(req.params.channelId);
+  const channel = botManager.findChannel(req.params.channelId);
   if (!channel) return res.status(404).json({ error: 'Channel not found' });
   if (!canBotViewChannel(channel)) return res.status(403).json({ error: 'No access' });
+
+  const member = await botManager.fetchMember(channel.guild.id, req.user.id);
+  if (!member) return res.status(403).json({ error: 'Not a member of this guild' });
+  if (!canUserReadHistory(channel, member)) return res.status(403).json({ error: 'No access to this channel' });
 
   if (isNsfwChannel(channel) && !req.user.ageVerified) {
     return res.status(403).json({ error: 'Age verification required', code: 'NSFW_GATE' });
@@ -170,9 +176,12 @@ app.post('/api/upload', authenticateJWT, upload.array('files', 10), (req, res) =
 });
 
 // Guild info
-app.get('/api/guilds/:guildId/info', authenticateJWT, (req, res) => {
-  const guild = discordClient.guilds.cache.get(req.params.guildId);
+app.get('/api/guilds/:guildId/info', authenticateJWT, async (req, res) => {
+  const guild = botManager.findGuild(req.params.guildId);
   if (!guild) return res.status(404).json({ error: 'Guild not found' });
+
+  const member = await botManager.fetchMember(req.params.guildId, req.user.id);
+  if (!member) return res.status(403).json({ error: 'Not a member of this guild' });
 
   res.json({
     id: guild.id,
@@ -185,8 +194,11 @@ app.get('/api/guilds/:guildId/info', authenticateJWT, (req, res) => {
 
 // Get members for a guild
 app.get('/api/guilds/:guildId/members', authenticateJWT, async (req, res) => {
-  const guild = discordClient.guilds.cache.get(req.params.guildId);
+  const guild = botManager.findGuild(req.params.guildId);
   if (!guild) return res.status(404).json({ error: 'Guild not found' });
+
+  const member = await botManager.fetchMember(req.params.guildId, req.user.id);
+  if (!member) return res.status(403).json({ error: 'Not a member of this guild' });
 
   try {
     const members = await guild.members.list({ limit: 1000 });
@@ -196,22 +208,22 @@ app.get('/api/guilds/:guildId/members', authenticateJWT, async (req, res) => {
       globalName: m.user.globalName || null,
       nickname: m.nickname,
       avatar: m.user.avatar,
+      guildAvatar: m.avatar, // per-server avatar hash
       bot: m.user.bot,
       roles: m.roles.cache
         .filter(r => r.id !== guild.id) // exclude @everyone
         .sort((a, b) => b.position - a.position)
-        .map(r => ({ id: r.id, name: r.name, color: r.hexColor !== '#000000' ? r.hexColor : null })),
+        .map(r => ({ id: r.id, name: r.name, color: r.hexColor !== '#000000' ? r.hexColor : null, position: r.position })),
       highestRoleColor: m.displayHexColor !== '#000000' ? m.displayHexColor : null,
       isOwner: m.id === guild.ownerId,
     }));
 
-    // Sort: owner first, then by highest role position, then alphabetical
+    // Sort: owner first, then by highest role position descending, then alphabetical
     formatted.sort((a, b) => {
       if (a.isOwner !== b.isOwner) return a.isOwner ? -1 : 1;
-      // Compare highest role position (already sorted in roles array)
-      const aTop = a.roles[0]?.name || '';
-      const bTop = b.roles[0]?.name || '';
-      if (aTop !== bTop) return aTop.localeCompare(bTop);
+      const aPos = a.roles[0]?.position ?? -1;
+      const bPos = b.roles[0]?.position ?? -1;
+      if (aPos !== bPos) return bPos - aPos;
       return (a.nickname || a.globalName || a.username).localeCompare(b.nickname || b.globalName || b.username);
     });
 
@@ -223,14 +235,97 @@ app.get('/api/guilds/:guildId/members', authenticateJWT, async (req, res) => {
 });
 
 // Check webhook permission for a channel
-app.get('/api/channels/:channelId/can-send', authenticateJWT, (req, res) => {
-  const channel = discordClient.channels.cache.get(req.params.channelId);
+app.get('/api/channels/:channelId/can-send', authenticateJWT, async (req, res) => {
+  const channel = botManager.findChannel(req.params.channelId);
   if (!channel) return res.status(404).json({ error: 'Channel not found' });
 
+  const member = await botManager.fetchMember(channel.guild.id, req.user.id);
+  const canSend = canManageWebhooks(channel) && !!member && canUserSendMessages(channel, member);
+
   res.json({
-    canSend: canManageWebhooks(channel),
+    canSend,
     nsfw: isNsfwChannel(channel),
   });
+});
+
+// ---- Admin API routes ----
+
+function requireAdmin(req, res, next) {
+  if (!config.adminUserId) return res.status(403).json({ error: 'Admin not configured' });
+  if (req.user.userId !== config.adminUserId) return res.status(403).json({ error: 'Forbidden' });
+  next();
+}
+
+// List registered bots
+app.get('/api/admin/bots', authenticateJWT, requireAdmin, (req, res) => {
+  const bots = [];
+  for (const [botId, client] of botManager.clients) {
+    // Skip primary bot
+    if (botId === config.discord.clientId) continue;
+    bots.push({
+      botId,
+      name: client.user?.tag || 'Unknown',
+      guildCount: client.guilds.cache.size,
+    });
+  }
+  res.json(bots);
+});
+
+// Add a new bot
+app.post('/api/admin/bots', authenticateJWT, requireAdmin, async (req, res) => {
+  const { token } = req.body;
+  if (!token) return res.status(400).json({ error: 'Token required' });
+
+  try {
+    // Temporarily login to extract bot info
+    const { Client, GatewayIntentBits } = await import('discord.js');
+    const tempClient = new Client({ intents: [GatewayIntentBits.Guilds] });
+    await tempClient.login(token);
+
+    const botId = tempClient.user.id;
+    const botName = tempClient.user.tag;
+
+    // Destroy temp client — we'll create the real one via BotManager
+    tempClient.destroy();
+
+    // Check not already registered
+    if (botManager.clients.has(botId)) {
+      return res.status(409).json({ error: 'Bot already registered' });
+    }
+
+    // Add via bot manager (full intents)
+    const client = await botManager.add(botId, token);
+    setupRelayForClient(client, io);
+
+    // Save to DB
+    addBot(token, botId, botName, req.user.userId);
+
+    console.log(`[admin] Bot ${botName} (${botId}) added by ${req.user.userId}`);
+    res.json({ botId, name: botName, guildCount: client.guilds.cache.size });
+  } catch (err) {
+    console.error('[admin] Failed to add bot:', err);
+    res.status(400).json({ error: err.message || 'Failed to add bot' });
+  }
+});
+
+// Remove a bot
+app.delete('/api/admin/bots/:botId', authenticateJWT, requireAdmin, async (req, res) => {
+  const { botId } = req.params;
+
+  // Don't allow removing the primary bot
+  if (botId === config.discord.clientId) {
+    return res.status(400).json({ error: 'Cannot remove primary bot' });
+  }
+
+  if (!botManager.clients.has(botId)) {
+    return res.status(404).json({ error: 'Bot not found' });
+  }
+
+  await botManager.remove(botId);
+  removeBot(botId);
+
+  console.log(`[admin] Bot ${botId} removed by ${req.user.userId}`);
+  res.json({ success: true });
 });
 
 // Serve built React app in production
@@ -250,14 +345,27 @@ async function start() {
   console.log('[db] Initializing database...');
   await initDatabase();
 
-  console.log('[discord] Logging in...');
-  await discordClient.login(config.discord.token);
-  console.log(`[discord] Logged in as ${discordClient.user.tag}`);
-  console.log(`[discord] In ${discordClient.guilds.cache.size} guilds`);
+  // Login primary bot
+  console.log('[discord] Logging in primary bot...');
+  const primaryClient = await botManager.add(config.discord.clientId, config.discord.token);
+  console.log(`[discord] Primary bot: ${primaryClient.user.tag} — ${primaryClient.guilds.cache.size} guilds`);
+
+  // Load registered bots from DB
+  const registeredBots = getAllBots();
+  for (const bot of registeredBots) {
+    try {
+      await botManager.add(bot.bot_id, bot.bot_token);
+    } catch (err) {
+      console.error(`[discord] Failed to login registered bot ${bot.bot_name || bot.bot_id}:`, err.message);
+    }
+  }
+
+  const totalGuilds = botManager.getAllClients().reduce((sum, c) => sum + c.guilds.cache.size, 0);
+  console.log(`[discord] ${botManager.clients.size} bot(s) active, ${totalGuilds} total guilds`);
 
   // Set up relay and socket handlers
-  setupDiscordRelay(discordClient, io);
-  setupSocketHandlers(io, discordClient);
+  setupDiscordRelay(botManager, io);
+  setupSocketHandlers(io, botManager);
 
   httpServer.listen(config.port, () => {
     console.log(`[server] Listening on port ${config.port}`);

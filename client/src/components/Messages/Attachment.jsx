@@ -33,6 +33,7 @@ export default function Attachment({ attachment }) {
           className="rounded-md cursor-pointer max-w-full"
           onClick={() => setExpanded(true)}
           loading="lazy"
+          referrerPolicy="no-referrer"
         />
         {expanded && (
           <div
@@ -43,6 +44,7 @@ export default function Attachment({ attachment }) {
               src={url}
               alt={attachment.filename}
               className="max-w-[90vw] max-h-[90vh] object-contain"
+              referrerPolicy="no-referrer"
             />
           </div>
         )}
@@ -79,7 +81,7 @@ export default function Attachment({ attachment }) {
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
       </svg>
       <div className="min-w-0">
-        <div className="text-sm text-[#00aff4] truncate hover:underline">{attachment.filename}</div>
+        <div className="text-sm text-discord-link truncate hover:underline">{attachment.filename}</div>
         <div className="text-xs text-discord-lighter">{formatFileSize(attachment.size)}</div>
       </div>
     </a>

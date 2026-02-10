@@ -8,12 +8,34 @@ export function canBotViewChannel(channel) {
   return channel.permissionsFor(me).has(PermissionFlagsBits.ViewChannel);
 }
 
-// Get all text channels the bot can see in a guild
-export function getAccessibleChannels(guild) {
+// Check if a member can view a channel
+export function canUserViewChannel(channel, member) {
+  if (!member) return false;
+  return channel.permissionsFor(member).has(PermissionFlagsBits.ViewChannel);
+}
+
+// Check if a member can send messages in a channel
+export function canUserSendMessages(channel, member) {
+  if (!member) return false;
+  const perms = channel.permissionsFor(member);
+  return perms.has(PermissionFlagsBits.ViewChannel) && perms.has(PermissionFlagsBits.SendMessages);
+}
+
+// Check if a member can read message history in a channel
+export function canUserReadHistory(channel, member) {
+  if (!member) return false;
+  const perms = channel.permissionsFor(member);
+  return perms.has(PermissionFlagsBits.ViewChannel) && perms.has(PermissionFlagsBits.ReadMessageHistory);
+}
+
+// Get all text channels the bot can see in a guild, optionally filtered by member permissions
+export function getAccessibleChannels(guild, member = null) {
   return guild.channels.cache
     .filter(ch => {
       if (ch.type !== ChannelType.GuildText && ch.type !== ChannelType.GuildAnnouncement) return false;
-      return canBotViewChannel(ch);
+      if (!canBotViewChannel(ch)) return false;
+      if (member && !canUserViewChannel(ch, member)) return false;
+      return true;
     })
     .sort((a, b) => a.position - b.position);
 }
@@ -38,8 +60,8 @@ export function canSendMessages(channel) {
 }
 
 // Get channels grouped by category
-export function getChannelsByCategory(guild) {
-  const accessible = getAccessibleChannels(guild);
+export function getChannelsByCategory(guild, member = null) {
+  const accessible = getAccessibleChannels(guild, member);
   const categories = new Map();
   const uncategorized = [];
 

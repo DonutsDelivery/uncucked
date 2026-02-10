@@ -68,6 +68,21 @@ export function useMessages(channelId) {
     };
   }, [channelId, socket]);
 
+  // Re-join channel room on socket reconnect
+  useEffect(() => {
+    if (!socket || !channelId) return;
+
+    function onReconnect() {
+      socket.emit('channel:join', { channelId }, (res) => {
+        if (res?.error) console.error('Failed to rejoin channel:', res.error);
+      });
+      joinedRef.current = channelId;
+    }
+
+    socket.on('connect', onReconnect);
+    return () => socket.off('connect', onReconnect);
+  }, [socket, channelId]);
+
   // Listen for real-time events
   useEffect(() => {
     if (!socket || !channelId) return;

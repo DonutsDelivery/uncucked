@@ -51,7 +51,7 @@ export async function sendAsUser(channel, user, content, files = []) {
       username: displayName,
       avatarURL,
       files: files.map(f => ({
-        attachment: f.buffer,
+        attachment: Buffer.from(f.buffer),
         name: f.originalname,
       })),
     });

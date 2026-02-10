@@ -67,7 +67,7 @@ export default function GuildList() {
             className="w-full h-full object-cover"
           />
         </button>
-        <div className="absolute left-14 bottom-0 bg-discord-darker text-white text-xs px-2 py-1 rounded hidden group-hover:block whitespace-nowrap z-10">
+        <div className="absolute left-14 bottom-0 bg-discord-darker text-discord-white text-xs px-2 py-1 rounded hidden group-hover:block whitespace-nowrap z-10">
           {user?.globalName || user?.username} (click to logout)
         </div>
       </div>

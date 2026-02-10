@@ -24,7 +24,7 @@ Your browser talks to the Express server, which talks to Discord through a bot. 
 - **OAuth2 Login** — Sign in with your real Discord account
 - **Real-time Messages** — Live message streaming via Socket.IO
 - **Webhook Sending** — Messages appear with your name and avatar
-- **NSFW Channels** — Age gate that you control, not Discord
+- **NSFW Channels** — Age-gated as required by law, no ID upload needed
 - **Member List** — See who's online in each channel
 - **File Uploads** — Send images and attachments
 - **Markdown Rendering** — Bold, italic, code blocks, spoilers, etc.
@@ -45,14 +45,13 @@ That's it. No setup, no server, no config. Your server admin just adds the bot a
 
 ---
 
-### Option 2: Self-host, use our domain
+### Option 2: Add your own bot
 
-Run your own server with your own bot, and get a free subdomain on `uncucked.online` so you don't need to buy a domain.
+Register your bot token on [uncucked.online](https://uncucked.online) — no self-hosting needed. Your bot's servers appear alongside the main bot's for all users who share those servers.
 
-1. Set up your own server (see [Server Setup](#server-setup) below)
-2. Request a subdomain — open an issue or DM us with your server IP
-3. We'll point `yourname.uncucked.online` to your server
-4. Add `https://yourname.uncucked.online/api/auth/callback` as a redirect URL in your Discord app
+1. Create a Discord bot in the [Developer Portal](https://discord.com/developers/applications) (enable Message Content + Server Members intents)
+2. Invite the bot to your servers
+3. Contact the admin to register your bot token — your bot's servers will appear on uncucked.online
 
 ---
 
@@ -174,6 +173,7 @@ server {
 | `CLIENT_URL` | Frontend URL for CORS/redirects |
 | `SERVER_URL` | Backend URL for OAuth2 callback |
 | `ALLOWED_ORIGINS` | Comma-separated list of allowed origins for CORS (optional, defaults to CLIENT_URL) |
+| `ADMIN_USER_ID` | Discord user ID for admin access (multi-bot management) |
 
 ## Tech Stack
 

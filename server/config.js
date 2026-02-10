@@ -24,4 +24,5 @@ export default {
   clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
   serverUrl: process.env.SERVER_URL || 'http://localhost:3001',
   allowedOrigins,
+  adminUserId: process.env.ADMIN_USER_ID || null,
 };

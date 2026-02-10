@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useGuild } from '../../context/GuildContext.jsx';
-import { userAvatarUrl } from '../../utils/cdn.js';
+import { userAvatarUrl, memberAvatarUrl } from '../../utils/cdn.js';
 
 export default function MemberList() {
   const { selectedGuild } = useGuild();
@@ -29,7 +29,7 @@ export default function MemberList() {
 
   if (!selectedGuild) return null;
 
-  // Group members by their highest role
+  // Group members by their highest role — Map preserves insertion order from server
   const grouped = new Map();
   members.forEach(m => {
     const topRole = m.roles[0]?.name || 'Online';
@@ -40,18 +40,18 @@ export default function MemberList() {
   });
 
   return (
-    <div className="w-60 bg-discord-dark flex flex-col shrink-0 border-l border-discord-darker/50">
-      <div className="flex-1 overflow-y-auto py-4 px-2">
+    <div className="w-60 bg-discord-dark flex flex-col shrink-0">
+      <div className="flex-1 overflow-y-auto pt-6 px-2">
         {loading ? (
-          <div className="text-discord-lighter text-sm px-2">Loading members...</div>
+          <div className="text-discord-muted text-sm px-2">Loading members...</div>
         ) : (
           [...grouped.values()].map(group => (
-            <div key={group.name} className="mb-4">
-              <div className="px-2 mb-1 text-xs font-semibold text-discord-lighter uppercase tracking-wide">
+            <div key={group.name} className="mb-2">
+              <div className="px-2 pt-4 pb-1 text-xs font-semibold text-discord-channels-default uppercase tracking-[.02em]">
                 {group.name} — {group.members.length}
               </div>
               {group.members.map(member => (
-                <MemberItem key={member.id} member={member} />
+                <MemberItem key={member.id} member={member} guildId={selectedGuild.id} />
               ))}
             </div>
           ))
@@ -61,15 +61,17 @@ export default function MemberList() {
   );
 }
 
-function MemberItem({ member }) {
+function MemberItem({ member, guildId }) {
   const displayName = member.nickname || member.globalName || member.username;
   const nameColor = member.highestRoleColor || undefined;
+  const avatarSrc = memberAvatarUrl(guildId, member.id, member.guildAvatar, 64)
+    || userAvatarUrl(member.id, member.avatar, 64);
 
   return (
     <div className="flex items-center gap-2 px-2 py-1 rounded hover:bg-discord-light/30 cursor-pointer group">
       <div className="relative shrink-0">
         <img
-          src={userAvatarUrl(member.id, member.avatar, 64)}
+          src={avatarSrc}
           alt={displayName}
           className="w-8 h-8 rounded-full"
         />

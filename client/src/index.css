@@ -2,6 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Default theme vars (dark) — overridden by JS theme system */
+:root {
+  --dc-darker: 18 18 20;
+  --dc-dark: 26 26 30;
+  --dc-medium: 26 26 30;
+  --dc-light: 32 33 37;
+  --dc-lighter: 65 67 74;
+  --dc-lightest: 171 173 179;
+  --dc-text: 239 238 240;
+  --dc-white: 242 243 245;
+  --dc-muted: 151 151 159;
+  --dc-channels: 128 130 139;
+  --dc-embed: 56 59 65;
+  --dc-input: 56 59 65;
+  --dc-scrollbar: 95 96 106;
+  --dc-scrollbar-hover: 78 80 88;
+  --dc-spoiler: 26 26 30;
+  --dc-spoiler-revealed: 65 67 74;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -11,37 +31,54 @@
 body {
   overflow: hidden;
   height: 100vh;
+  font-size: 16px;
 }
 
 #root {
   height: 100vh;
 }
 
-/* Scrollbar styling */
+/* Scrollbar styling — match Discord's thin scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #2b2d31;
-  border-radius: 4px;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e1f22;
+  background: rgb(var(--dc-scrollbar));
   border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #18191c;
+  background: rgb(var(--dc-scrollbar-hover));
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 /* Discord-style link colors */
 a {
-  color: #00aff4;
+  color: #00a8fc;
   text-decoration: none;
 }
 a:hover {
   text-decoration: underline;
+}
+
+/* Spoiler text */
+.spoiler {
+  background: rgb(var(--dc-spoiler));
+  color: transparent;
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 0 2px;
+}
+.spoiler.revealed {
+  background: rgb(var(--dc-spoiler-revealed));
+  color: inherit;
 }

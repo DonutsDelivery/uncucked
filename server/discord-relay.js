@@ -8,6 +8,7 @@ export function formatMessage(msg) {
     authorUsername: msg.author.username,
     authorAvatar: msg.author.avatar,
     authorBot: msg.author.bot,
+    authorColor: msg.member?.displayHexColor !== '#000000' ? msg.member?.displayHexColor : null,
     globalName: msg.author.globalName || null,
     content: msg.content,
     attachments: msg.attachments.map(a => ({
@@ -40,28 +41,23 @@ export function formatMessage(msg) {
   };
 }
 
-// Set up discord.js event listeners that relay to Socket.io
-export function setupDiscordRelay(client, io) {
+// Attach relay listeners to a single discord.js Client
+export function setupRelayForClient(client, io) {
   client.on('messageCreate', (msg) => {
-    if (!msg.guild) return; // Ignore DMs
-
+    if (!msg.guild) return;
     const formatted = formatMessage(msg);
-
-    // Broadcast to anyone in that channel's room
     io.to(`channel:${msg.channelId}`).emit('message:create', formatted);
   });
 
   client.on('messageUpdate', (oldMsg, newMsg) => {
     if (!newMsg.guild) return;
-    if (!newMsg.author) return; // Partial update
-
+    if (!newMsg.author) return;
     const formatted = formatMessage(newMsg);
     io.to(`channel:${newMsg.channelId}`).emit('message:update', formatted);
   });
 
   client.on('messageDelete', (msg) => {
     if (!msg.guild) return;
-
     io.to(`channel:${msg.channelId}`).emit('message:delete', {
       id: msg.id,
       channelId: msg.channelId,
@@ -70,7 +66,6 @@ export function setupDiscordRelay(client, io) {
 
   client.on('typingStart', (typing) => {
     if (!typing.guild) return;
-
     io.to(`channel:${typing.channel.id}`).emit('typing:start', {
       channelId: typing.channel.id,
       userId: typing.user.id,
@@ -78,6 +73,12 @@ export function setupDiscordRelay(client, io) {
       avatar: typing.user.avatar,
     });
   });
+}
 
-  console.log('[relay] Discord event relay initialized');
+// Set up relay for all bots in the manager
+export function setupDiscordRelay(botManager, io) {
+  for (const client of botManager.getAllClients()) {
+    setupRelayForClient(client, io);
+  }
+  console.log('[relay] Discord event relay initialized for all bots');
 }

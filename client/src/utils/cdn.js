@@ -13,6 +13,12 @@ export function userAvatarUrl(userId, avatarHash, size = 64) {
   return `https://cdn.discordapp.com/avatars/${userId}/${avatarHash}.${ext}?size=${size}`;
 }
 
+export function memberAvatarUrl(guildId, userId, avatarHash, size = 64) {
+  if (!avatarHash) return null;
+  const ext = avatarHash.startsWith('a_') ? 'gif' : 'png';
+  return `https://cdn.discordapp.com/guilds/${guildId}/users/${userId}/avatars/${avatarHash}.${ext}?size=${size}`;
+}
+
 export function formatTimestamp(ts) {
   const d = new Date(ts);
   const now = new Date();
