@@ -4,6 +4,7 @@ import { Server as SocketServer } from 'socket.io';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
 
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -52,10 +53,16 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB (Discord bot/webhook limit)
 });
 
+// Rate limiting
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: 'Too many requests' } });
+const apiLimiter = rateLimit({ windowMs: 60 * 1000, max: 60, message: { error: 'Too many requests' } });
+const adminLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { error: 'Too many requests' } });
+
 // Auth routes
-app.use('/api/auth', authRouter);
+app.use('/api/auth', authLimiter, authRouter);
 
 // ---- Protected API routes ----
+app.use('/api', apiLimiter);
 
 // Get mutual guilds (servers both the user and bot are in)
 app.get('/api/guilds', authenticateJWT, async (req, res) => {
@@ -252,12 +259,12 @@ app.get('/api/channels/:channelId/can-send', authenticateJWT, async (req, res) =
 
 function requireAdmin(req, res, next) {
   if (!config.adminUserId) return res.status(403).json({ error: 'Admin not configured' });
-  if (req.user.userId !== config.adminUserId) return res.status(403).json({ error: 'Forbidden' });
+  if (req.user.id !== config.adminUserId) return res.status(403).json({ error: 'Forbidden' });
   next();
 }
 
 // List registered bots
-app.get('/api/admin/bots', authenticateJWT, requireAdmin, (req, res) => {
+app.get('/api/admin/bots', adminLimiter, authenticateJWT, requireAdmin, (req, res) => {
   const bots = [];
   for (const [botId, client] of botManager.clients) {
     // Skip primary bot
@@ -272,7 +279,7 @@ app.get('/api/admin/bots', authenticateJWT, requireAdmin, (req, res) => {
 });
 
 // Add a new bot
-app.post('/api/admin/bots', authenticateJWT, requireAdmin, async (req, res) => {
+app.post('/api/admin/bots', adminLimiter, authenticateJWT, requireAdmin, async (req, res) => {
   const { token } = req.body;
   if (!token) return res.status(400).json({ error: 'Token required' });
 
@@ -304,12 +311,12 @@ app.post('/api/admin/bots', authenticateJWT, requireAdmin, async (req, res) => {
     res.json({ botId, name: botName, guildCount: client.guilds.cache.size });
   } catch (err) {
     console.error('[admin] Failed to add bot:', err);
-    res.status(400).json({ error: err.message || 'Failed to add bot' });
+    res.status(400).json({ error: 'Failed to add bot' });
   }
 });
 
 // Remove a bot
-app.delete('/api/admin/bots/:botId', authenticateJWT, requireAdmin, async (req, res) => {
+app.delete('/api/admin/bots/:botId', adminLimiter, authenticateJWT, requireAdmin, async (req, res) => {
   const { botId } = req.params;
 
   // Don't allow removing the primary bot
