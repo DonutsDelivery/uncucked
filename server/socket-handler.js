@@ -1,6 +1,19 @@
 import { canBotViewChannel, isNsfwChannel, canUserViewChannel, canUserSendMessages } from './permissions.js';
 import { sendAsUser } from './webhooks.js';
 
+// Simple per-socket rate limiter for message sending
+const MESSAGE_RATE_LIMIT = 5; // max messages
+const MESSAGE_RATE_WINDOW = 10_000; // per 10 seconds
+
+function checkMessageRate(socket) {
+  const now = Date.now();
+  if (!socket._msgTimestamps) socket._msgTimestamps = [];
+  socket._msgTimestamps = socket._msgTimestamps.filter(t => now - t < MESSAGE_RATE_WINDOW);
+  if (socket._msgTimestamps.length >= MESSAGE_RATE_LIMIT) return false;
+  socket._msgTimestamps.push(now);
+  return true;
+}
+
 export function setupSocketHandlers(io, botManager) {
   io.on('connection', (socket) => {
     console.log(`[socket] ${socket.user.username} connected`);
@@ -51,6 +64,10 @@ export function setupSocketHandlers(io, botManager) {
     // Send a message via webhook
     socket.on('message:send', async ({ channelId, content, files }, callback) => {
       try {
+        if (!checkMessageRate(socket)) {
+          return callback?.({ error: 'Slow down — too many messages' });
+        }
+
         console.log(`[socket] message:send to ${channelId} by ${socket.user.username} (${socket.user.id})`);
         const channel = botManager.findChannel(channelId);
         if (!channel) return callback?.({ error: 'Channel not found' });
@@ -70,7 +87,7 @@ export function setupSocketHandlers(io, botManager) {
         callback?.({ success: true, messageId: webhookMsg.id });
       } catch (err) {
         console.error('[socket] message:send error:', err);
-        callback?.({ error: err.message || 'Failed to send message' });
+        callback?.({ error: 'Failed to send message' });
       }
     });
 

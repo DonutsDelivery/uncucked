@@ -42,6 +42,9 @@ const io = new SocketServer(httpServer, {
 // Bot manager (replaces single discordClient)
 const botManager = new BotManager();
 
+// Trust first proxy (nginx) for correct client IP in rate limiting
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use(cookieParser());
@@ -158,7 +161,8 @@ app.get('/api/channels/:channelId/messages', authenticateJWT, async (req, res) =
 
   try {
     // Fetch from Discord API
-    const options = { limit: Math.min(parseInt(limit), 100) };
+    const parsedLimit = parseInt(limit, 10);
+    const options = { limit: Math.max(1, Math.min(Number.isFinite(parsedLimit) ? parsedLimit : 50, 100)) };
     if (before) options.before = before;
 
     const messages = await channel.messages.fetch(options);

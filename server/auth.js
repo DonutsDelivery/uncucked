@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import config from './config.js';
 import { upsertSession, getSession, setAgeVerified } from './database.js';
@@ -18,20 +19,37 @@ function getBaseUrl(req) {
 // Redirect to Discord OAuth2
 router.get('/discord', (req, res) => {
   const baseUrl = getBaseUrl(req);
+  const state = crypto.randomBytes(16).toString('hex');
+
+  res.cookie('oauth_state', state, {
+    httpOnly: true,
+    secure: baseUrl.startsWith('https'),
+    sameSite: 'lax',
+    maxAge: 10 * 60 * 1000, // 10 minutes
+  });
+
   const params = new URLSearchParams({
     client_id: config.discord.clientId,
     redirect_uri: `${baseUrl}/api/auth/callback`,
     response_type: 'code',
     scope: SCOPES,
+    state,
   });
   res.redirect(`https://discord.com/api/oauth2/authorize?${params}`);
 });
 
 // OAuth2 callback
 router.get('/callback', async (req, res) => {
-  const { code } = req.query;
+  const { code, state } = req.query;
   const baseUrl = getBaseUrl(req);
   if (!code) return res.redirect(`${baseUrl}/login?error=no_code`);
+
+  // CSRF protection: verify state matches cookie
+  const savedState = req.cookies?.oauth_state;
+  res.clearCookie('oauth_state');
+  if (!state || !savedState || state !== savedState) {
+    return res.redirect(`${baseUrl}/login?error=invalid_state`);
+  }
 
   try {
     // Exchange code for tokens
