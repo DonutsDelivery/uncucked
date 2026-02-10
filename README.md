@@ -1,6 +1,6 @@
 # uncucked
 
-A Discord web client that works through a relay bot — bypassing Discord's age verification and NSFW channel restrictions. Self-hostable, open source.
+A Discord web client that works through a relay bot — bypassing Discord's ID verification to access NSFW servers and instead complies with the global lawful requirement of confirming that you are over 18. Self-hostable, open source.
 <img width="1195" height="953" alt="image" src="https://github.com/user-attachments/assets/ec80345c-ea16-4fed-8418-b674c144db32" />
 
 ## How It Works
