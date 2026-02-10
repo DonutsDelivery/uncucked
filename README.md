@@ -17,7 +17,7 @@ A Discord web client that works through a relay bot — bypassing Discord's ID v
 └─────────┘                         └─────────────┘                   └─────────┘
 ```
 
-Your browser talks to the Express server, which talks to Discord through a bot. Messages, channels, members — everything flows through the relay. You authenticate with Discord OAuth2, and the bot reads/sends messages on your behalf via webhooks (matching your name and avatar).
+Your browser talks to the Express server, which talks to Discord through a bot. Messages, channels, members — everything flows through the relay. You authenticate with Discord OAuth2, and the bot reads/sends messages on your behalf via webhooks (matching your name and avatar). This is already how a lot of Discord <-> Matrix relays work.
 
 ## Features
 
