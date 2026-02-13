@@ -1,8 +1,28 @@
 # Discord Content Unblocker
 
-A userscript that removes Discord's client-side sensitive content filter and NSFW channel age gates.
+Removes Discord's sensitive content filter and NSFW channel age gates. Works in the browser (userscript/extension) and desktop app (Vencord plugin).
 
-## Option A: Browser Extension (recommended)
+## Option A: Vencord / Vesktop plugin (desktop app)
+
+Works with [Vesktop](https://github.com/Vencord/Vesktop) (Linux/Mac) or any Discord client with [Vencord](https://vencord.dev/) installed.
+
+1. Clone Vencord and install dependencies:
+   ```bash
+   git clone https://github.com/Vendicated/Vencord.git
+   cd Vencord && npm i -g pnpm && pnpm install
+   ```
+2. Copy the plugin:
+   ```bash
+   cp -r /path/to/this-repo/discord-unblock/vencord-plugin src/userplugins/nsfwUnblocker
+   ```
+3. Build and point Vesktop to it:
+   ```bash
+   pnpm build
+   ```
+4. In Vesktop: **Settings → Vesktop → Developer Options → Vencord Location → Change** → select the `dist` folder
+5. Restart Vesktop, then enable **NSFWUnblocker** in Settings → Plugins
+
+## Option B: Browser Extension
 
 No extra setup — install and it just works.
 
@@ -14,7 +34,7 @@ Or load manually:
 3. Click **Load unpacked** and select the `discord-unblock/extension/` folder
 4. Open Discord — done
 
-## Option B: Userscript
+## Option C: Userscript
 
 ### Prerequisites
 
