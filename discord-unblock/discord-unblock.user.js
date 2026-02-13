@@ -239,94 +239,98 @@
 
   // ─── Layer 4: DOM Fallback ────────────────────────────────────────
 
+  // Class prefixes to strip from various elements
+  const SPOILER_STRIP = ['opaque_', 'hidden_', 'constrainedObscureContent_'];
+  const IMAGE_STRIP = ['obscured_', 'hiddenExplicit_', 'hiddenMosaicItem_'];
+
+  function stripClasses(el, prefixes) {
+    let stripped = false;
+    for (const cls of [...el.classList]) {
+      if (prefixes.some(p => cls.startsWith(p))) {
+        el.classList.remove(cls);
+        stripped = true;
+      }
+    }
+    return stripped;
+  }
+
+  function sweepDOM(root) {
+    if (!root) return;
+
+    // 1. Hide explicit content warning overlays
+    root.querySelectorAll('[class*="explicitContentWarning"], [class*="obscureWarning"]').forEach(el => {
+      if (el.style.display !== 'none') {
+        el.style.display = 'none';
+        log('Hid content warning overlay');
+      }
+    });
+
+    // 2. Strip spoiler/blur classes from spoiler containers
+    root.querySelectorAll('[class*="spoilerContent"]').forEach(el => {
+      if (stripClasses(el, SPOILER_STRIP)) {
+        log('Revealed spoiler container');
+      }
+    });
+
+    // 3. Strip obscured/hidden classes from image wrappers
+    root.querySelectorAll('[class*="obscured_"], [class*="hiddenExplicit_"], [class*="hiddenMosaicItem_"]').forEach(el => {
+      if (stripClasses(el, IMAGE_STRIP)) {
+        log('Revealed image wrapper');
+      }
+    });
+
+    // 4. Auto-click NSFW gate "Continue" buttons
+    root.querySelectorAll('button').forEach(btn => {
+      const text = btn.textContent?.trim();
+      if (text === 'Continue' || text === 'I understand') {
+        const gate = btn.closest('[class*="channelNotice"], [class*="nsfwGate"], [class*="ageGate"], [class*="ageConfirmation"]');
+        if (gate) {
+          log('Auto-clicking NSFW gate button:', text);
+          setTimeout(() => btn.click(), 100);
+        }
+      }
+    });
+  }
+
   function patchDOM() {
+    // Watch for new nodes AND attribute changes (Discord often adds elements
+    // first, then applies blocking classes in a separate React render cycle)
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
-        for (const node of mutation.addedNodes) {
-          if (node.nodeType !== Node.ELEMENT_NODE) continue;
-          handleElement(node);
+        if (mutation.type === 'childList') {
+          for (const node of mutation.addedNodes) {
+            if (node.nodeType === Node.ELEMENT_NODE) sweepDOM(node);
+          }
+        } else if (mutation.type === 'attributes' && mutation.target.nodeType === Node.ELEMENT_NODE) {
+          const el = mutation.target;
+          const cls = el.className;
+          if (typeof cls !== 'string') continue;
+          if (cls.includes('explicitContentWarning') || cls.includes('obscureWarning')) {
+            el.style.display = 'none';
+          }
+          if (cls.includes('spoilerContent')) {
+            stripClasses(el, SPOILER_STRIP);
+          }
+          if (cls.includes('obscured_') || cls.includes('hiddenExplicit_') || cls.includes('hiddenMosaicItem_')) {
+            stripClasses(el, IMAGE_STRIP);
+          }
         }
       }
     });
 
-    function handleElement(el) {
-      // Hide explicit content warning overlays
-      const warnings = el.querySelectorAll
-        ? el.querySelectorAll('[class*="explicitContentWarning"]')
-        : [];
-      if (el.className && typeof el.className === 'string' && el.className.includes('explicitContentWarning')) {
-        el.style.display = 'none';
-      }
-      for (const warning of warnings) {
-        warning.style.display = 'none';
-        log('Hid explicit content warning');
-      }
-
-      // Remove spoiler overlay classes (hidden_, opaque_)
-      const spoilers = el.querySelectorAll
-        ? el.querySelectorAll('[class*="spoilerContent"]')
-        : [];
-      const checkSpoiler = (spoiler) => {
-        const classes = [...spoiler.classList];
-        for (const cls of classes) {
-          if (cls.startsWith('hidden_') || cls.startsWith('opaque_')) {
-            spoiler.classList.remove(cls);
-            log('Removed spoiler class:', cls);
-          }
-        }
-      };
-      if (el.className && typeof el.className === 'string' && el.className.includes('spoilerContent')) {
-        checkSpoiler(el);
-      }
-      for (const spoiler of spoilers) {
-        checkSpoiler(spoiler);
-      }
-
-      // Auto-click NSFW gate "Continue" buttons
-      const buttons = el.querySelectorAll
-        ? el.querySelectorAll('button')
-        : [];
-      const checkButton = (btn) => {
-        const text = btn.textContent?.trim();
-        if (text === 'Continue' || text === 'I understand') {
-          // Verify it's inside an NSFW gate container
-          const parent = btn.closest('[class*="channelNotice"]') ||
-                         btn.closest('[class*="nsfwGate"]') ||
-                         btn.closest('[class*="ageGate"]') ||
-                         btn.closest('[class*="ageConfirmation"]');
-          if (parent) {
-            log('Auto-clicking NSFW gate button:', text);
-            setTimeout(() => btn.click(), 100);
-          }
-        }
-      };
-      if (el.tagName === 'BUTTON') {
-        checkButton(el);
-      }
-      for (const btn of buttons) {
-        checkButton(btn);
-      }
-
-      // Hide sensitive content overlays in DMs
-      const overlays = el.querySelectorAll
-        ? el.querySelectorAll('[class*="sensitiveContent"], [class*="contentWarning"]')
-        : [];
-      if (el.className && typeof el.className === 'string' &&
-          (el.className.includes('sensitiveContent') || el.className.includes('contentWarning'))) {
-        el.style.display = 'none';
-      }
-      for (const overlay of overlays) {
-        overlay.style.display = 'none';
-      }
-    }
-
-    // Initial sweep of existing DOM
-    handleElement(document.body || document.documentElement);
+    // Initial sweep
+    sweepDOM(document.body || document.documentElement);
 
     observer.observe(document.documentElement, {
       childList: true,
       subtree: true,
+      attributes: true,
+      attributeFilter: ['class'],
     });
+
+    // Periodic fallback sweep — catches anything the observer missed
+    // (e.g. virtual-scrolled messages entering viewport)
+    setInterval(() => sweepDOM(document.body), 2000);
 
     log('DOM observer installed');
   }
