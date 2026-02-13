@@ -1,6 +1,6 @@
 # uncucked
 
-> **Just want to unblock NSFW on Discord? No server needed.**
+> **Unblock NSFW content on Discord — DMs and servers. No server needed, just a userscript.**
 
 [![Install Userscript](https://img.shields.io/badge/Install_Userscript-Click_Here-blue?style=for-the-badge&logo=tampermonkey)](https://raw.githubusercontent.com/DonutsDelivery/uncucked/main/discord-unblock/discord-unblock.user.js)
 
