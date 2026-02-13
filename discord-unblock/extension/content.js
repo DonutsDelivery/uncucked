@@ -156,7 +156,8 @@
         modified = patchMessage(payload.d);
       } else if (payload.t === 'READY' || payload.t === 'READY_SUPPLEMENTAL') {
         if (payload.d?.user) {
-          payload.d.user.nsfw_allowed = true;
+          // Only bypass ID verification — preserve the regular "are you 18?" gate
+          payload.d.user.age_verification_status = 3;
           modified = true;
         }
       }
@@ -252,11 +253,10 @@
               const user = fn.call(prop);
               if (!user || !user.id) continue;
 
-              user.nsfwAllowed = true;
+              // Only bypass ID verification — preserve the regular "are you 18?" gate
               user.ageVerificationStatus = 3;
 
               log('Patched user:', user.username,
-                '- nsfwAllowed:', user.nsfwAllowed,
                 'ageVerification:', user.ageVerificationStatus);
               clearInterval(interval);
               return;
@@ -321,16 +321,7 @@
       }
     });
 
-    root.querySelectorAll('button').forEach(btn => {
-      const text = btn.textContent?.trim();
-      if (text === 'Continue' || text === 'I understand') {
-        const gate = btn.closest('[class*="channelNotice"], [class*="nsfwGate"], [class*="ageGate"], [class*="ageConfirmation"]');
-        if (gate) {
-          log('Auto-clicking NSFW gate button:', text);
-          setTimeout(() => btn.click(), 100);
-        }
-      }
-    });
+    // Regular "are you 18?" gates are left intact — users confirm age themselves
   }
 
   function patchDOM() {
