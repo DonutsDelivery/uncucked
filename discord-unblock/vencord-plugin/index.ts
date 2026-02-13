@@ -138,7 +138,7 @@ function patchUser() {
     try {
         const user = UserStore?.getCurrentUser?.();
         if (user) {
-            user.nsfwAllowed = true;
+            // Only bypass ID verification — preserve the regular "are you 18?" gate
             user.ageVerificationStatus = 3;
             return true;
         }
@@ -178,13 +178,7 @@ function sweepDOM(root: Element | null) {
             }
         });
 
-    root.querySelectorAll("button").forEach(btn => {
-        const text = btn.textContent?.trim();
-        if (text === "Continue" || text === "I understand") {
-            const gate = btn.closest('[class*="channelNotice"], [class*="nsfwGate"], [class*="ageGate"], [class*="ageConfirmation"]');
-            if (gate) setTimeout(() => btn.click(), 100);
-        }
-    });
+    // Regular "are you 18?" gates are left intact — users confirm age themselves
 }
 
 let observer: MutationObserver | null = null;
@@ -192,18 +186,10 @@ let sweepInterval: ReturnType<typeof setInterval> | null = null;
 
 export default definePlugin({
     name: "NSFWUnblocker",
-    description: "Removes NSFW age gates and explicit content filters from attachments",
+    description: "Bypasses Discord's ID verification requirement for NSFW content without bypassing the regular age gate",
     authors: [{ name: "uncucked", id: 0n }],
 
-    patches: [
-        {
-            find: ",nsfwAllowed:",
-            replacement: {
-                match: /(\i)\.nsfwAllowed=/,
-                replace: "$1.nsfwAllowed=true;$1.nsfwAllowed=",
-            },
-        },
-    ],
+    patches: [],
 
     flux: {
         MESSAGE_CREATE: patchEvent,
