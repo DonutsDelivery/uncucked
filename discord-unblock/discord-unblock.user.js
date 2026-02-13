@@ -200,8 +200,8 @@
   window.WebSocket = function (...args) {
     const ws = new OriginalWebSocket(...args);
 
-    // Intercept addEventListener('message', ...) — our listener fires first
-    // and modifies event.data in place for subsequent listeners
+    // Patch incoming messages — addEventListener fires before onmessage,
+    // so Discord's handler will see the modified event.data
     ws.addEventListener('message', function (event) {
       const patched = patchWSData(event.data);
       if (patched !== null) {
@@ -213,18 +213,7 @@
       }
     });
 
-    // Also trap onmessage setter to wrap the handler
-    let _onmessage = null;
-    Object.defineProperty(ws, 'onmessage', {
-      get() { return _onmessage; },
-      set(handler) {
-        _onmessage = handler;
-        // The addEventListener above already patches event.data before
-        // onmessage fires, so no extra wrapping needed here.
-      },
-      configurable: true,
-    });
-
+    // Don't trap onmessage — let the browser dispatch normally
     return ws;
   };
 
@@ -241,7 +230,7 @@
 
   function patchWebpackUser() {
     let attempts = 0;
-    const MAX_ATTEMPTS = 30;
+    const MAX_ATTEMPTS = 60;
 
     const interval = setInterval(() => {
       attempts++;
@@ -255,7 +244,6 @@
       }
 
       try {
-        // Get module cache — use the return-value trick from the push
         const moduleCache = webpackChunkdiscord_app.push([
           [Symbol()], {}, (r) => r.c,
         ]);
@@ -266,24 +254,34 @@
           return;
         }
 
-        // Find a store with getCurrentUser() — check prototype chain too
         for (const id in moduleCache) {
           try {
             const mod = moduleCache[id]?.exports;
             if (!mod) continue;
 
+            // Check all possible export shapes
             const candidates = [];
             try { if (mod.default) candidates.push(mod.default); } catch {}
             try { if (mod.Z) candidates.push(mod.Z); } catch {}
             try { if (mod.ZP) candidates.push(mod.ZP); } catch {}
+            try {
+              for (const key of Object.keys(mod)) {
+                if (mod[key] && typeof mod[key] === 'object') candidates.push(mod[key]);
+              }
+            } catch {}
             candidates.push(mod);
 
             for (const prop of candidates) {
               if (!prop || typeof prop !== 'object') continue;
-              const fn = prop.getCurrentUser || prop.__proto__?.getCurrentUser;
-              if (typeof fn !== 'function') continue;
+              let fn;
+              try { fn = prop.getCurrentUser; } catch { continue; }
+              if (typeof fn !== 'function') {
+                try { fn = prop.__proto__?.getCurrentUser; } catch { continue; }
+                if (typeof fn !== 'function') continue;
+              }
 
-              const user = fn.call(prop);
+              let user;
+              try { user = fn.call(prop); } catch { continue; }
               if (!user || !user.id) continue;
 
               // Only bypass ID verification — preserve the regular "are you 18?" gate
@@ -291,7 +289,15 @@
 
               log('Patched user:', user.username,
                 'ageVerification:', user.ageVerificationStatus);
+
+              // Re-patch periodically in case Discord resets the user object
               clearInterval(interval);
+              setInterval(() => {
+                try {
+                  const u = fn.call(prop);
+                  if (u) u.ageVerificationStatus = 3;
+                } catch {}
+              }, 3000);
               return;
             }
           } catch {
@@ -307,7 +313,7 @@
         log('Webpack patch error:', e.message);
         if (attempts >= MAX_ATTEMPTS) clearInterval(interval);
       }
-    }, 500);
+    }, 1000);
   }
 
   // Start webpack patching once DOM is interactive
