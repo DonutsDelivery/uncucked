@@ -1,5 +1,13 @@
 # uncucked
 
+> **Just want to unblock NSFW on Discord? No server needed.**
+
+[![Install Userscript](https://img.shields.io/badge/Install_Userscript-Click_Here-blue?style=for-the-badge&logo=tampermonkey)](https://raw.githubusercontent.com/DonutsDelivery/uncucked/main/discord-unblock/discord-unblock.user.js)
+
+Requires [Tampermonkey](https://www.tampermonkey.net/) (Chrome/Brave/Edge) or [Violentmonkey](https://violentmonkey.github.io/) (Firefox) · Chromium users: [enable Developer mode + Allow User Scripts](discord-unblock/#chromium-browsers-chrome-brave-edge) · [How it works](discord-unblock/)
+
+---
+
 A Discord web client that works through a relay bot — bypassing Discord's ID verification to access NSFW servers and instead complies with the global lawful requirement of confirming that you are over 18. Self-hostable, open source.
 <img width="1195" height="953" alt="image" src="https://github.com/user-attachments/assets/ec80345c-ea16-4fed-8418-b674c144db32" />
 
