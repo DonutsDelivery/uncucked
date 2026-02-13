@@ -58,40 +58,112 @@
     return modified;
   }
 
-  // ─── Layer 1: Fetch Intercept ─────────────────────────────────────
+  // ─── Layer 1: XHR Intercept ──────────────────────────────────────
+  //
+  // Discord uses XMLHttpRequest (not fetch) for API calls. The client
+  // sends X-Super-Properties which encodes age verification state,
+  // causing 403 on NSFW channel message endpoints. We hijack XHR.send()
+  // for message URLs: instead of letting the original request go through,
+  // we do a clean fetch() with just the Authorization header and inject
+  // the result back into the XHR object before Discord processes it.
 
-  const originalFetch = window.fetch;
   const MESSAGE_URL_RE = /\/api\/v\d+\/channels\/\d+\/messages/;
-  const SEARCH_URL_RE = /\/api\/v\d+\/(channels|guilds)\/\d+\/messages\/search/;
 
-  window.fetch = async function (...args) {
-    const response = await originalFetch.apply(this, args);
-    const url = typeof args[0] === 'string' ? args[0] : args[0]?.url;
-
-    if (!url || (!MESSAGE_URL_RE.test(url) && !SEARCH_URL_RE.test(url))) {
-      return response;
-    }
-
+  function getAuthToken() {
     try {
-      const clone = response.clone();
-      const json = await clone.json();
-      const modified = patchMessages(json);
-      if (modified) {
-        log('Patched fetch response:', url);
-        return new Response(JSON.stringify(json), {
-          status: response.status,
-          statusText: response.statusText,
-          headers: response.headers,
-        });
-      }
+      const iframe = document.createElement('iframe');
+      document.body.appendChild(iframe);
+      const token = iframe.contentWindow.localStorage.getItem('token');
+      iframe.remove();
+      return token ? token.replace(/"/g, '') : null;
     } catch {
-      // Not JSON or parse error — return original
+      return null;
     }
+  }
 
-    return response;
+  const nativeXHROpen = XMLHttpRequest.prototype.open;
+  const nativeXHRSend = XMLHttpRequest.prototype.send;
+  const nativeXHRSetHeader = XMLHttpRequest.prototype.setRequestHeader;
+
+  XMLHttpRequest.prototype.open = function (method, url, async_, user, pass) {
+    this._unblockerUrl = url;
+    this._unblockerMethod = method;
+    this._unblockerHeaders = {};
+    return nativeXHROpen.call(this, method, url, async_, user, pass);
   };
 
-  log('Fetch intercept installed');
+  XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
+    if (this._unblockerHeaders) this._unblockerHeaders[name] = value;
+    return nativeXHRSetHeader.call(this, name, value);
+  };
+
+  XMLHttpRequest.prototype.send = function (body) {
+    const url = this._unblockerUrl;
+    const xhr = this;
+
+    // For GET requests to message endpoints, hijack with clean fetch
+    if (url && MESSAGE_URL_RE.test(url) && this._unblockerMethod === 'GET') {
+      const token = this._unblockerHeaders['Authorization'] || getAuthToken();
+      if (token) {
+        log('Hijacking XHR for messages:', url);
+
+        fetch(url, {
+          method: 'GET',
+          headers: { 'Authorization': token },
+        })
+          .then(async (resp) => {
+            let text = await resp.text();
+
+            // Also strip explicit flags from the response
+            try {
+              const json = JSON.parse(text);
+              if (patchMessages(json)) {
+                text = JSON.stringify(json);
+                log('Stripped explicit flags from response');
+              }
+            } catch {}
+
+            // Build response headers string
+            const headerLines = [];
+            resp.headers.forEach((v, k) => headerLines.push(k + ': ' + v));
+
+            // Inject response into XHR
+            Object.defineProperty(xhr, 'readyState', { value: 4, configurable: true });
+            Object.defineProperty(xhr, 'status', { value: resp.status, configurable: true });
+            Object.defineProperty(xhr, 'statusText', { value: resp.statusText, configurable: true });
+            Object.defineProperty(xhr, 'responseText', { value: text, configurable: true });
+            Object.defineProperty(xhr, 'response', { value: text, configurable: true });
+            Object.defineProperty(xhr, 'responseURL', { value: url, configurable: true });
+            Object.defineProperty(xhr, 'getAllResponseHeaders', {
+              value: () => headerLines.join('\r\n'),
+              configurable: true,
+            });
+            Object.defineProperty(xhr, 'getResponseHeader', {
+              value: (h) => resp.headers.get(h),
+              configurable: true,
+            });
+
+            log('Injected clean response, status:', resp.status);
+
+            // Fire XHR lifecycle events
+            xhr.dispatchEvent(new Event('readystatechange'));
+            xhr.dispatchEvent(new ProgressEvent('load'));
+            xhr.dispatchEvent(new ProgressEvent('loadend'));
+            if (typeof xhr.onreadystatechange === 'function') xhr.onreadystatechange();
+            if (typeof xhr.onload === 'function') xhr.onload();
+          })
+          .catch((e) => {
+            log('Clean fetch failed, falling back to original XHR:', e);
+            nativeXHRSend.call(xhr, body);
+          });
+        return; // Don't call original send
+      }
+    }
+
+    return nativeXHRSend.call(this, body);
+  };
+
+  log('XHR intercept installed');
 
   // ─── Layer 2: WebSocket Intercept ─────────────────────────────────
 
@@ -182,38 +254,46 @@
       }
 
       try {
-        let moduleCache;
-        webpackChunkdiscord_app.push([
-          [Symbol()],
-          {},
-          (r) => { moduleCache = r.c; },
+        // Get module cache — use the return-value trick from the push
+        const moduleCache = webpackChunkdiscord_app.push([
+          [Symbol()], {}, (r) => r.c,
         ]);
+        webpackChunkdiscord_app.pop();
 
-        if (!moduleCache) {
+        if (!moduleCache || typeof moduleCache !== 'object') {
           if (attempts >= MAX_ATTEMPTS) clearInterval(interval);
           return;
         }
 
-        // Find a store with getCurrentUser() and patch the user object
+        // Find a store with getCurrentUser() — check prototype chain too
         for (const id in moduleCache) {
-          const mod = moduleCache[id]?.exports;
-          if (!mod) continue;
-
-          const store = mod.default || mod.Z || mod;
-          if (typeof store?.getCurrentUser !== 'function') continue;
-
           try {
-            const user = store.getCurrentUser();
-            if (!user || !user.username) continue;
+            const mod = moduleCache[id]?.exports;
+            if (!mod) continue;
 
-            user.nsfwAllowed = true;
-            user.ageVerificationStatus = 3;
+            const candidates = [];
+            try { if (mod.default) candidates.push(mod.default); } catch {}
+            try { if (mod.Z) candidates.push(mod.Z); } catch {}
+            try { if (mod.ZP) candidates.push(mod.ZP); } catch {}
+            candidates.push(mod);
 
-            log('Patched user:', user.username,
-              '- nsfwAllowed:', user.nsfwAllowed,
-              'ageVerification:', user.ageVerificationStatus);
-            clearInterval(interval);
-            return;
+            for (const prop of candidates) {
+              if (!prop || typeof prop !== 'object') continue;
+              const fn = prop.getCurrentUser || prop.__proto__?.getCurrentUser;
+              if (typeof fn !== 'function') continue;
+
+              const user = fn.call(prop);
+              if (!user || !user.id) continue;
+
+              user.nsfwAllowed = true;
+              user.ageVerificationStatus = 3;
+
+              log('Patched user:', user.username,
+                '- nsfwAllowed:', user.nsfwAllowed,
+                'ageVerification:', user.ageVerificationStatus);
+              clearInterval(interval);
+              return;
+            }
           } catch {
             // Module threw — skip
           }
