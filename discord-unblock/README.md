@@ -21,7 +21,9 @@ Or load manually:
 Install a userscript manager:
 
 - **Chrome/Brave/Edge:** [Tampermonkey](https://www.tampermonkey.net/)
-- **Firefox:** [Violentmonkey](https://violentmonkey.github.io/) or [Greasemonkey](https://www.greasespot.net/)
+- **Firefox:** [Violentmonkey](https://violentmonkey.github.io/)
+
+> **Note:** Greasemonkey is **not supported** — it sandboxes scripts so the XHR/WebSocket patches can't reach Discord's code, and Discord's CSP blocks workarounds. Use Violentmonkey on Firefox instead.
 
 ### Install
 
@@ -37,14 +39,14 @@ Or manually:
 
 ### Chromium browsers (Chrome, Brave, Edge)
 
-Tampermonkey requires **Developer mode** enabled to inject userscripts:
+Tampermonkey requires extra permissions to inject userscripts:
 
 1. Go to `chrome://extensions`
 2. Toggle **Developer mode** on (top right corner)
-3. Scroll to Tampermonkey and make sure **Allow User Scripts** is enabled (click Details → scroll down)
+3. Find Tampermonkey → click **Details** → scroll down → enable **Allow User Scripts**
 4. Hard refresh Discord (`Ctrl+Shift+R`)
 
-> Firefox does **not** require this — Violentmonkey/Greasemonkey work out of the box.
+> Firefox with Violentmonkey does **not** require any of this.
 
 ## What it does
 

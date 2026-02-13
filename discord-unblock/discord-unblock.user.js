@@ -9,11 +9,7 @@
 // @grant        none
 // ==/UserScript==
 
-// Greasemonkey runs scripts in a sandbox — inject into the page's MAIN world
-// so we can patch XHR, WebSocket, and webpack prototypes that Discord actually uses.
 (function () {
-  const script = document.createElement('script');
-  script.textContent = '(' + function () {
   'use strict';
 
   const LOG_PREFIX = '[Discord Unblocker]';
@@ -433,7 +429,4 @@
   }
 
   log('All layers initialized');
-} + ')();';
-  (document.head || document.documentElement).appendChild(script);
-  script.remove();
 })();
