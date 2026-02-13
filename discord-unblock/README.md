@@ -21,7 +21,7 @@ Or load manually:
 Install a userscript manager:
 
 - **Chrome/Brave/Edge:** [Tampermonkey](https://www.tampermonkey.net/)
-- **Firefox:** [Tampermonkey](https://addons.mozilla.org/en-US/firefox/addon/tampermonkey/) or [Violentmonkey](https://violentmonkey.github.io/)
+- **Firefox:** [Violentmonkey](https://violentmonkey.github.io/)
 
 > **Note:** Greasemonkey is **not supported** — GM4 runs scripts in an isolated content script scope, so the XHR/WebSocket patches can't reach Discord's code. Use Tampermonkey or Violentmonkey instead.
 
