@@ -42,7 +42,7 @@ Don't want to use a relay? Install the extension or userscript to unblock conten
 2. Open Discord — NSFW gates and content filters are gone
 
 **Userscript alternative:**
-1. Install [Tampermonkey](https://www.tampermonkey.net/) (Chrome/Brave/Edge) or [Violentmonkey](https://violentmonkey.github.io/) (Firefox)
+1. Install [Tampermonkey](https://www.tampermonkey.net/) (all browsers) or [Violentmonkey](https://violentmonkey.github.io/) (Firefox)
 2. **Chromium only:** enable Developer mode + Allow User Scripts ([setup guide](discord-unblock/#chromium-browsers-chrome-brave-edge))
 3. **[Click here to install the userscript](https://raw.githubusercontent.com/DonutsDelivery/uncucked/main/discord-unblock/discord-unblock.user.js)** — your manager will prompt you
 4. Open Discord and hard refresh (`Ctrl+Shift+R`) — NSFW gates and content filters are gone
