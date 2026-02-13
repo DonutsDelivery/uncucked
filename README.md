@@ -33,13 +33,19 @@ Your browser talks to the Express server, which talks to Discord through a bot. 
 
 ## Getting Started
 
-### Option 0: Userscript (no server needed)
+### Option 0: Browser extension or userscript (no server needed)
 
-Don't want to use a relay? Install the userscript to unblock content directly on discord.com — no bot, no server, no proxy.
+Don't want to use a relay? Install the extension or userscript to unblock content directly on discord.com — no bot, no server, no proxy.
 
-1. Install [Tampermonkey](https://www.tampermonkey.net/) (Chrome/Edge) or [Violentmonkey](https://violentmonkey.github.io/) (Firefox)
-2. **[Click here to install the userscript](https://raw.githubusercontent.com/DonutsDelivery/uncucked/main/discord-unblock/discord-unblock.user.js)** — your manager will prompt you
-3. Open Discord in your browser — NSFW gates and content filters are gone
+**Browser extension (recommended):**
+1. **[Install from Chrome Web Store](#)** (Chrome, Brave, Edge) — one click, no setup
+2. Open Discord — NSFW gates and content filters are gone
+
+**Userscript alternative:**
+1. Install [Tampermonkey](https://www.tampermonkey.net/) (Chrome/Brave/Edge) or [Violentmonkey](https://violentmonkey.github.io/) (Firefox)
+2. Enable **Developer mode** in `chrome://extensions` (Chromium browsers only — [why?](discord-unblock/#chromium-browsers-chrome-brave-edge))
+3. **[Click here to install the userscript](https://raw.githubusercontent.com/DonutsDelivery/uncucked/main/discord-unblock/discord-unblock.user.js)** — your manager will prompt you
+4. Open Discord — NSFW gates and content filters are gone
 
 This patches Discord's client-side filters: strips explicit attachment flags, bypasses age gates, and auto-dismisses NSFW channel warnings. See [discord-unblock/](discord-unblock/) for details.
 

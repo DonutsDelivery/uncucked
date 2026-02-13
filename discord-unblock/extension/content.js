@@ -1,19 +1,4 @@
-// ==UserScript==
-// @name         Discord Content Unblocker
-// @namespace    https://github.com/discord-unblock
-// @version      1.0.0
-// @description  Removes Discord's sensitive content filter and NSFW age gates
-// @match        https://discord.com/*
-// @match        https://*.discord.com/*
-// @run-at       document-start
-// @grant        none
-// ==/UserScript==
-
-// Greasemonkey runs scripts in a sandbox — inject into the page's MAIN world
-// so we can patch XHR, WebSocket, and webpack prototypes that Discord actually uses.
 (function () {
-  const script = document.createElement('script');
-  script.textContent = '(' + function () {
   'use strict';
 
   const LOG_PREFIX = '[Discord Unblocker]';
@@ -45,12 +30,10 @@
   function patchMessages(data) {
     let modified = false;
     if (Array.isArray(data)) {
-      // Standard message list: [{...}, {...}]
       for (const msg of data) {
         if (patchMessage(msg)) modified = true;
       }
     } else if (data && Array.isArray(data.messages)) {
-      // Search results: { messages: [[msg, ...], [msg, ...]] }
       for (const group of data.messages) {
         if (Array.isArray(group)) {
           for (const msg of group) {
@@ -63,13 +46,6 @@
   }
 
   // ─── Layer 1: XHR Intercept ──────────────────────────────────────
-  //
-  // Discord uses XMLHttpRequest (not fetch) for API calls. The client
-  // sends X-Super-Properties which encodes age verification state,
-  // causing 403 on NSFW channel message endpoints. We hijack XHR.send()
-  // for message URLs: instead of letting the original request go through,
-  // we do a clean fetch() with just the Authorization header and inject
-  // the result back into the XHR object before Discord processes it.
 
   const MESSAGE_URL_RE = /\/api\/v\d+\/channels\/\d+\/messages/;
 
@@ -105,7 +81,6 @@
     const url = this._unblockerUrl;
     const xhr = this;
 
-    // For GET requests to message endpoints, hijack with clean fetch
     if (url && MESSAGE_URL_RE.test(url) && this._unblockerMethod === 'GET') {
       const token = this._unblockerHeaders['Authorization'] || getAuthToken();
       if (token) {
@@ -118,7 +93,6 @@
           .then(async (resp) => {
             let text = await resp.text();
 
-            // Also strip explicit flags from the response
             try {
               const json = JSON.parse(text);
               if (patchMessages(json)) {
@@ -127,11 +101,9 @@
               }
             } catch {}
 
-            // Build response headers string
             const headerLines = [];
             resp.headers.forEach((v, k) => headerLines.push(k + ': ' + v));
 
-            // Inject response into XHR
             Object.defineProperty(xhr, 'readyState', { value: 4, configurable: true });
             Object.defineProperty(xhr, 'status', { value: resp.status, configurable: true });
             Object.defineProperty(xhr, 'statusText', { value: resp.statusText, configurable: true });
@@ -149,7 +121,6 @@
 
             log('Injected clean response, status:', resp.status);
 
-            // Fire XHR lifecycle events
             xhr.dispatchEvent(new Event('readystatechange'));
             xhr.dispatchEvent(new ProgressEvent('load'));
             xhr.dispatchEvent(new ProgressEvent('loadend'));
@@ -160,7 +131,7 @@
             log('Clean fetch failed, falling back to original XHR:', e);
             nativeXHRSend.call(xhr, body);
           });
-        return; // Don't call original send
+        return;
       }
     }
 
@@ -203,8 +174,6 @@
   window.WebSocket = function (...args) {
     const ws = new OriginalWebSocket(...args);
 
-    // Intercept addEventListener('message', ...) — our listener fires first
-    // and modifies event.data in place for subsequent listeners
     ws.addEventListener('message', function (event) {
       const patched = patchWSData(event.data);
       if (patched !== null) {
@@ -216,14 +185,11 @@
       }
     });
 
-    // Also trap onmessage setter to wrap the handler
     let _onmessage = null;
     Object.defineProperty(ws, 'onmessage', {
       get() { return _onmessage; },
       set(handler) {
         _onmessage = handler;
-        // The addEventListener above already patches event.data before
-        // onmessage fires, so no extra wrapping needed here.
       },
       configurable: true,
     });
@@ -231,7 +197,6 @@
     return ws;
   };
 
-  // Preserve prototype chain and static properties
   window.WebSocket.prototype = OriginalWebSocket.prototype;
   Object.defineProperty(window.WebSocket, 'name', { value: 'WebSocket' });
   for (const prop of ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED']) {
@@ -258,7 +223,6 @@
       }
 
       try {
-        // Get module cache — use the return-value trick from the push
         const moduleCache = webpackChunkdiscord_app.push([
           [Symbol()], {}, (r) => r.c,
         ]);
@@ -269,7 +233,6 @@
           return;
         }
 
-        // Find a store with getCurrentUser() — check prototype chain too
         for (const id in moduleCache) {
           try {
             const mod = moduleCache[id]?.exports;
@@ -314,7 +277,6 @@
     }, 500);
   }
 
-  // Start webpack patching once DOM is interactive
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', patchWebpackUser);
   } else {
@@ -323,7 +285,6 @@
 
   // ─── Layer 4: DOM Fallback ────────────────────────────────────────
 
-  // Class prefixes to strip from various elements
   const SPOILER_STRIP = ['opaque_', 'hidden_', 'constrainedObscureContent_'];
   const IMAGE_STRIP = ['obscured_', 'hiddenExplicit_', 'hiddenMosaicItem_'];
 
@@ -341,7 +302,6 @@
   function sweepDOM(root) {
     if (!root) return;
 
-    // 1. Hide explicit content warning overlays
     root.querySelectorAll('[class*="explicitContentWarning"], [class*="obscureWarning"]').forEach(el => {
       if (el.style.display !== 'none') {
         el.style.display = 'none';
@@ -349,21 +309,18 @@
       }
     });
 
-    // 2. Strip spoiler/blur classes from spoiler containers
     root.querySelectorAll('[class*="spoilerContent"]').forEach(el => {
       if (stripClasses(el, SPOILER_STRIP)) {
         log('Revealed spoiler container');
       }
     });
 
-    // 3. Strip obscured/hidden classes from image wrappers
     root.querySelectorAll('[class*="obscured_"], [class*="hiddenExplicit_"], [class*="hiddenMosaicItem_"]').forEach(el => {
       if (stripClasses(el, IMAGE_STRIP)) {
         log('Revealed image wrapper');
       }
     });
 
-    // 4. Auto-click NSFW gate "Continue" buttons
     root.querySelectorAll('button').forEach(btn => {
       const text = btn.textContent?.trim();
       if (text === 'Continue' || text === 'I understand') {
@@ -377,8 +334,6 @@
   }
 
   function patchDOM() {
-    // Watch for new nodes AND attribute changes (Discord often adds elements
-    // first, then applies blocking classes in a separate React render cycle)
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
         if (mutation.type === 'childList') {
@@ -402,7 +357,6 @@
       }
     });
 
-    // Initial sweep
     sweepDOM(document.body || document.documentElement);
 
     observer.observe(document.documentElement, {
@@ -412,14 +366,11 @@
       attributeFilter: ['class'],
     });
 
-    // Periodic fallback sweep — catches anything the observer missed
-    // (e.g. virtual-scrolled messages entering viewport)
     setInterval(() => sweepDOM(document.body), 2000);
 
     log('DOM observer installed');
   }
 
-  // Start DOM patching when body is available
   if (document.body) {
     patchDOM();
   } else {
@@ -433,7 +384,4 @@
   }
 
   log('All layers initialized');
-} + ')();';
-  (document.head || document.documentElement).appendChild(script);
-  script.remove();
 })();
